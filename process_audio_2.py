@@ -6,24 +6,24 @@ import random
 from tqdm import tqdm
 import csv
 
-# If reproducibility is desired, uncomment and set a seed
-# random.seed(42)
-# torch.manual_seed(42)
+# Set device for GPU support
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 
 def pitch_shift(audio, sr, shift_steps):
-    return torchaudio.functional.pitch_shift(audio, sr, shift_steps)
+    return torchaudio.functional.pitch_shift(audio.cpu(), sr, shift_steps).to(device)
 
 def add_noise(audio, scale):
-    noise = torch.randn_like(audio)
+    noise = torch.randn_like(audio, device=audio.device)
     return audio + noise * scale
 
 def apply_gain(audio, gain_factor):
     return audio * gain_factor
 
 def double_resample(audio, sr, new_sr):
-    audio = torchaudio.functional.resample(audio, sr, new_sr)
+    audio = torchaudio.functional.resample(audio.cpu(), sr, new_sr)
     audio = torchaudio.functional.resample(audio, new_sr, sr)
-    return audio
+    return audio.to(device)
 
 def aug_combination(audio, sr, path, min_shift=-4, max_shift=4,
                     min_snr=5, max_snr=20, min_gain_db=-10, max_gain_db=10,
@@ -34,8 +34,7 @@ def aug_combination(audio, sr, path, min_shift=-4, max_shift=4,
     effects.append(('pitch_shift', shift_steps))
 
     snr = random.uniform(min_snr, max_snr)
-    # scale for add_noise
-    scale = audio.norm(p=2) / (torch.randn_like(audio).norm(p=2) * (10 ** (snr/20.0)))
+    scale = audio.norm(p=2) / (torch.randn_like(audio, device=device).norm(p=2) * (10 ** (snr/20.0)))
     effects.append(('add_noise', scale))
 
     gain_db = random.uniform(min_gain_db, max_gain_db)
@@ -60,7 +59,7 @@ def aug_combination(audio, sr, path, min_shift=-4, max_shift=4,
         elif eff == 'resample':
             processed = double_resample(processed, sr, param)
 
-    torchaudio.save(path, processed, sr, format='mp3')
+    torchaudio.save(path, processed.cpu(), sr, format='mp3')
 
 def check_existing_augmentations(base_name, aug_path, tries):
     existing_augs = []
@@ -109,10 +108,11 @@ def process_data(data_folder, output_folder, tries=5):
 
                     # Load audio only if we need to process something
                     audio, sr = torchaudio.load(input_path)
+                    audio = audio.to(device)
 
                     # Save original if it doesn't exist
                     if not os.path.exists(original_path):
-                        torchaudio.save(original_path, audio, sr, format='mp3')
+                        torchaudio.save(original_path, audio.cpu(), sr, format='mp3')
                         print(f"Saved original: {original_file}")
                     processed_files[sub].append(original_file)
 
