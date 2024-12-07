@@ -10,7 +10,7 @@ if __name__ == "__main__":
     # process_data_1(DATA_FOLDER, OUTPUT_FOLDER)
 
     print("Running process_audio_2...")
-    # process_data_2(OUTPUT_FOLDER, OUTPUT_FOLDER)
+    process_data_2(OUTPUT_FOLDER, OUTPUT_FOLDER)
 
     print("Running process_audio_3...")
-    process_data_3(OUTPUT_FOLDER, OUTPUT_FOLDER)
+    # process_data_3(OUTPUT_FOLDER, OUTPUT_FOLDER)
