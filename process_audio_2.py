@@ -62,6 +62,14 @@ def aug_combination(audio, sr, path, min_shift=-4, max_shift=4,
 
     torchaudio.save(path, processed, sr, format='mp3')
 
+def check_existing_augmentations(base_name, aug_path, tries):
+    existing_augs = []
+    for i in range(tries):
+        aug_filename = f"{base_name}_aug{i}.mp3"
+        if os.path.exists(os.path.join(aug_path, aug_filename)):
+            existing_augs.append(aug_filename)
+    return existing_augs
+
 def process_data(data_folder, output_folder, tries=5):
     input_folder = os.path.join(data_folder, "output1")
     output_folder = os.path.join(output_folder, "output2")
@@ -88,22 +96,42 @@ def process_data(data_folder, output_folder, tries=5):
                 aug_path = os.path.join(output_folder, sub)
 
                 try:
+                    # Check existing augmentations first
+                    existing_augs = check_existing_augmentations(base_name, aug_path, tries)
+                    original_file = f"{base_name}.mp3"
+                    original_path = os.path.join(aug_path, original_file)
+
+                    # If all files exist (original + all augmentations), skip processing
+                    if len(existing_augs) == tries and os.path.exists(original_path):
+                        processed_files[sub].extend([original_file] + existing_augs)
+                        print(f"Skipping {base_name} - all files exist")
+                        continue
+
+                    # Load audio only if we need to process something
                     audio, sr = torchaudio.load(input_path)
 
-                    # Save original
-                    original_output = os.path.join(aug_path, f"{base_name}.mp3")
-                    torchaudio.save(original_output, audio, sr, format='mp3')
-                    processed_files[sub].append(f"{base_name}.mp3")
+                    # Save original if it doesn't exist
+                    if not os.path.exists(original_path):
+                        torchaudio.save(original_path, audio, sr, format='mp3')
+                        print(f"Saved original: {original_file}")
+                    processed_files[sub].append(original_file)
 
-                    # Generate augmented versions
+                    # Generate only missing augmentations
                     for i in range(tries):
                         aug_filename = f"{base_name}_aug{i}.mp3"
                         aug_output = os.path.join(aug_path, aug_filename)
-                        aug_combination(audio, sr, aug_output)
+
+                        if not os.path.exists(aug_output):
+                            aug_combination(audio, sr, aug_output)
+                            print(f"Generated: {aug_filename}")
+                        else:
+                            print(f"Skipping existing: {aug_filename}")
+
                         processed_files[sub].append(aug_filename)
 
                 except Exception as e:
                     print(f"Error processing {input_path}: {e}")
+                    continue
 
             # Only write to metadata if both hum and song have processed files
             if processed_files["hum"] and processed_files["song"]:
