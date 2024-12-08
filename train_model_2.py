@@ -3,7 +3,9 @@ import os
 import torch
 import glob
 
-def generate_lists(root_dir='output/output3', train_ratio=0.8):
+def generate_lists(root_dir='output/output3', train_ratio=0.8, output_dir='checkpoints'):
+    os.makedirs(output_dir, exist_ok=True)
+
     hum_files = glob.glob(os.path.join(root_dir, 'hum', '*.npy'))
     song_files = glob.glob(os.path.join(root_dir, 'song', '*.npy'))
 
@@ -28,10 +30,9 @@ def generate_lists(root_dir='output/output3', train_ratio=0.8):
         else:
             val_lines.append(line)
 
-
     # Process song files
     for f in song_files:
-        filename = os.path.basename(f )
+        filename = os.path.basename(f)
         file_id = int(filename.split('.')[0].split('_')[0])
         rel_path = os.path.join('song', filename)
         line = f"{rel_path} {file_id}"
@@ -40,11 +41,10 @@ def generate_lists(root_dir='output/output3', train_ratio=0.8):
         else:
             val_lines.append(line)
 
-    # Write files
-    with open('train_list.txt', 'w') as f:
+    with open(os.path.join(output_dir, 'train_list.txt'), 'w') as f:
         f.write('\n'.join(train_lines))
 
-    with open('val_list.txt', 'w') as f:
+    with open(os.path.join(output_dir, 'val_list.txt'), 'w') as f:
         f.write('\n'.join(val_lines))
 
 class Config:
@@ -52,7 +52,7 @@ class Config:
         # Training settings
         self.train_batch_size = 32
         self.num_workers = 4
-        self.max_epoch = 20
+        self.max_epoch = 12
         self.lr = 0.1
         self.weight_decay = 0.0005
         self.lr_step = 10
@@ -72,8 +72,8 @@ class Config:
         # Data settings
         self.input_shape = (1, 80, 630)
         self.train_root = 'output/output3'
-        self.train_list = 'train_list.txt'
-        self.val_list = 'val_list.txt'
+        self.train_list = 'checkpoints/train_list.txt'
+        self.val_list = 'checkpoints/val_list.txt'
         self.mp3aug_ratio = 0.5
         self.npy_aug = True
 

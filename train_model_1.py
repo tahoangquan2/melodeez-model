@@ -17,13 +17,11 @@ from train_model_3 import (
     mrr_score
 )
 
-
 def save_model(model, save_path, name, iter_cnt):
     os.makedirs(save_path, exist_ok=True)
     save_name = os.path.join(save_path, name + '_' + str(iter_cnt) + '.pth')
     torch.save(model.state_dict(), save_name)
     return save_name
-
 
 def train_model_1(opt):
     # Set random seed for reproducibility
