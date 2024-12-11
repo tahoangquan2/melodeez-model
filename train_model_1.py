@@ -10,7 +10,8 @@ from train_model_3 import (
     CustomResNet,
     AudioDataset,
     read_val,
-    calculate_mrr
+    calculate_mrr,
+    Visualizer
 )
 
 def save_model(model, save_path, name, iter_cnt):
@@ -21,21 +22,39 @@ def save_model(model, save_path, name, iter_cnt):
 
 def train_model_1(opt):
     torch.manual_seed(3407)
+
+    if opt.display:
+        visualizer = Visualizer()
     device = torch.device("cuda")
 
     train_dataset = AudioDataset(opt.train_root, opt.train_list, opt.input_shape)
-    trainloader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4, pin_memory=True)
+    trainloader = DataLoader(train_dataset,
+                           batch_size=32,
+                           shuffle=True,
+                           num_workers=4,
+                           pin_memory=True)
 
     print(f"Train dataset size: {len(train_dataset)}")
+    print(f"{len(trainloader)} train iters per epoch")
 
-    criterion = torch.nn.CrossEntropyLoss()
+    try:
+        sample_data = next(iter(trainloader))
+        print(f"Batch shape: {sample_data[0].shape}")
+        print(f"Label shape: {sample_data[1].shape}")
+        print(f"Unique labels: {torch.unique(sample_data[1])}")
+    except Exception as e:
+        print(f"Warning: Could not get sample batch: {e}")
+
+    print("Initializing model...")
     model = CustomResNet(feature_dim=512)
     model.to(device)
     model = DataParallel(model)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.0005)
+    criterion = torch.nn.CrossEntropyLoss()
     scheduler = CosineAnnealingLR(optimizer, T_max=50)
 
+    print("Starting training...")
     start = time.time()
     mrr_best = 0
     patience_counter = 0
@@ -63,8 +82,14 @@ def train_model_1(opt):
 
                 if batch_idx % opt.print_freq == 0:
                     speed = opt.print_freq / (time.time() - start)
-                    print(f'Epoch {epoch} Batch {batch_idx}/{len(trainloader)} '
+                    time_str = time.asctime(time.localtime(time.time()))
+                    print(f'{time_str} Epoch {epoch} Batch {batch_idx}/{len(trainloader)} '
                           f'Speed {speed:.1f} samples/sec Loss {loss.item():.4f}')
+
+                    if opt.display:
+                        visualizer.display_current_results(batch_idx + epoch*len(trainloader),
+                                                        loss.item(),
+                                                        name='train_loss')
                     start = time.time()
 
             except Exception as e:
@@ -75,29 +100,31 @@ def train_model_1(opt):
         epoch_loss /= batch_count
         print(f"Epoch {epoch} - Average Loss: {epoch_loss:.4f}")
 
-        try:
-            print('Calculating MRR...')
-            save_model(model, opt.checkpoints_path, opt.backbone, 'latest')
-            model.eval()
+        if epoch % 5 == 0 or epoch == opt.max_epoch:
+            try:
+                print('Calculating MRR...')
+                save_model(model, opt.checkpoints_path, opt.backbone, 'latest')
+                model.eval()
 
-            data_val = read_val(opt.val_list, opt.train_root)
-            mrr = calculate_mrr(model, data_val, opt.input_shape)
-            print(f'Epoch {epoch}: MRR = {mrr:.4f}')
+                data_val = read_val(opt.val_list, opt.train_root)
+                mrr = calculate_mrr(model, data_val, opt.input_shape)
+                print(f'Epoch {epoch}: MRR = {mrr:.4f}')
 
-            if mrr > mrr_best:
-                mrr_best = mrr
-                save_model(model, opt.checkpoints_path, opt.backbone, 'best')
-                print(f"New best model saved with MRR: {mrr_best:.4f}")
-                patience_counter = 0
-            else:
-                patience_counter += 1
+                if mrr > mrr_best:
+                    mrr_best = mrr
+                    save_model(model, opt.checkpoints_path, opt.backbone, 'best')
+                    print(f"New best model saved with MRR: {mrr_best:.4f}")
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
 
-            if patience_counter >= max_patience:
-                print("Early stopping triggered")
-                break
+                if patience_counter >= max_patience:
+                    print("Early stopping triggered")
+                    break
 
-        except Exception as e:
-            print(f"Error during validation: {e}")
-            continue
+            except Exception as e:
+                print(f"Error during validation: {e}")
+                continue
 
     print(f"Training completed. Best MRR: {mrr_best:.4f}")
+    return mrr_best

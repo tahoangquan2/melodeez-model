@@ -46,6 +46,7 @@ def generate_lists(root_dir='output/output3', train_ratio=0.8, output_dir='check
 
 class Config:
     def __init__(self):
+        # Training settings
         self.train_batch_size = 32
         self.num_workers = 4
         self.max_epoch = 50
@@ -53,12 +54,21 @@ class Config:
         self.weight_decay = 0.0005
         self.print_freq = 100
 
+        # Model settings
         self.backbone = 'resnet18'
         self.input_shape = (1, 80, 630)
+        self.num_classes = 12
+
+        # Data settings
         self.train_root = 'output/output3'
         self.train_list = 'checkpoints/train_list.txt'
         self.val_list = 'checkpoints/val_list.txt'
+
+        # Save settings
         self.checkpoints_path = 'checkpoints'
+
+        # Visualization settings
+        self.display = False
 
 def main():
     opt = Config()
