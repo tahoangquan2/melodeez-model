@@ -6,7 +6,6 @@ import random
 from tqdm import tqdm
 import csv
 
-# Set device for GPU support
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
@@ -20,44 +19,32 @@ def add_noise(audio, scale):
 def apply_gain(audio, gain_factor):
     return audio * gain_factor
 
-def double_resample(audio, sr, new_sr):
-    audio = torchaudio.functional.resample(audio.cpu(), sr, new_sr)
-    audio = torchaudio.functional.resample(audio, new_sr, sr)
-    return audio.to(device)
-
-def aug_combination(audio, sr, path, min_shift=-4, max_shift=4,
-                    min_snr=5, max_snr=20, min_gain_db=-10, max_gain_db=10,
-                    min_sr=8000, max_sr=48000):
+def get_augmentation_params():
     effects = []
 
-    shift_steps = random.uniform(min_shift, max_shift)
+    shift_steps = random.uniform(-2, 2)
     effects.append(('pitch_shift', shift_steps))
 
-    snr = random.uniform(min_snr, max_snr)
-    scale = audio.norm(p=2) / (torch.randn_like(audio, device=device).norm(p=2) * (10 ** (snr/20.0)))
+    scale = random.uniform(0.01, 0.05)
     effects.append(('add_noise', scale))
 
-    gain_db = random.uniform(min_gain_db, max_gain_db)
+    gain_db = random.uniform(-3, 3)
     gain_factor = 10 ** (gain_db / 20.0)
     effects.append(('gain', gain_factor))
 
-    new_sr = random.randint(min_sr, max_sr)
-    effects.append(('resample', new_sr))
+    chosen_effect = random.choice(effects)
+    return chosen_effect
 
-    random.shuffle(effects)
-    num_effects = random.randint(2, 4)
-    chosen_effects = effects[:num_effects]
-
+def aug_combination(audio, sr, path, aug_params):
     processed = audio
-    for eff, param in chosen_effects:
-        if eff == 'pitch_shift':
-            processed = pitch_shift(processed, sr, param)
-        elif eff == 'add_noise':
-            processed = add_noise(processed, param)
-        elif eff == 'gain':
-            processed = apply_gain(processed, param)
-        elif eff == 'resample':
-            processed = double_resample(processed, sr, param)
+    effect_type, param = aug_params
+
+    if effect_type == 'pitch_shift':
+        processed = pitch_shift(processed, sr, param)
+    elif effect_type == 'add_noise':
+        processed = add_noise(processed, param)
+    elif effect_type == 'gain':
+        processed = apply_gain(processed, param)
 
     torchaudio.save(path, processed.cpu(), sr, format='mp3')
 
@@ -85,59 +72,54 @@ def process_data(data_folder, output_folder, tries=5):
     with open(metadata_path, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in tqdm(reader, desc="Processing Files"):
-            subs = ["hum", "song"]
-            processed_files = {sub: [] for sub in subs}
+            try:
+                hum_input = os.path.join(input_folder, "hum", row['hum'])
+                song_input = os.path.join(input_folder, "song", row['song'])
 
-            for sub in subs:
-                input_file = row[sub]
-                input_path = os.path.join(input_folder, sub, input_file)
-                base_name = os.path.splitext(input_file)[0]
-                aug_path = os.path.join(output_folder, sub)
+                hum_base_name = os.path.splitext(row['hum'])[0]
+                song_base_name = os.path.splitext(row['song'])[0]
 
-                try:
-                    # Check existing augmentations first
-                    existing_augs = check_existing_augmentations(base_name, aug_path, tries)
-                    original_file = f"{base_name}.mp3"
-                    original_path = os.path.join(aug_path, original_file)
+                hum_audio, hum_sr = torchaudio.load(hum_input)
+                song_audio, song_sr = torchaudio.load(song_input)
+                hum_audio = hum_audio.to(device)
+                song_audio = song_audio.to(device)
 
-                    # If all files exist (original + all augmentations), skip processing
-                    if len(existing_augs) == tries and os.path.exists(original_path):
-                        processed_files[sub].extend([original_file] + existing_augs)
-                        print(f"Skipping {base_name} - all files exist")
-                        continue
+                hum_original = f"{hum_base_name}.mp3"
+                song_original = f"{song_base_name}.mp3"
+                hum_original_path = os.path.join(hum_out, hum_original)
+                song_original_path = os.path.join(song_out, song_original)
 
-                    # Load audio only if we need to process something
-                    audio, sr = torchaudio.load(input_path)
-                    audio = audio.to(device)
+                if not os.path.exists(hum_original_path):
+                    torchaudio.save(hum_original_path, hum_audio.cpu(), hum_sr, format='mp3')
+                if not os.path.exists(song_original_path):
+                    torchaudio.save(song_original_path, song_audio.cpu(), song_sr, format='mp3')
 
-                    # Save original if it doesn't exist
-                    if not os.path.exists(original_path):
-                        torchaudio.save(original_path, audio.cpu(), sr, format='mp3')
-                        print(f"Saved original: {original_file}")
-                    processed_files[sub].append(original_file)
+                processed_files = []
+                processed_files.append((hum_original, song_original))
 
-                    # Generate only missing augmentations
-                    for i in range(tries):
-                        aug_filename = f"{base_name}_aug{i}.mp3"
-                        aug_output = os.path.join(aug_path, aug_filename)
+                for i in range(tries):
+                    hum_aug = f"{hum_base_name}_aug{i}.mp3"
+                    song_aug = f"{song_base_name}_aug{i}.mp3"
+                    hum_aug_path = os.path.join(hum_out, hum_aug)
+                    song_aug_path = os.path.join(song_out, song_aug)
 
-                        if not os.path.exists(aug_output):
-                            aug_combination(audio, sr, aug_output)
-                            print(f"Generated: {aug_filename}")
-                        else:
-                            print(f"Skipping existing: {aug_filename}")
+                    if not os.path.exists(hum_aug_path) or not os.path.exists(song_aug_path):
+                        aug_params = get_augmentation_params()
+                        aug_combination(hum_audio, hum_sr, hum_aug_path, aug_params)
+                        aug_combination(song_audio, song_sr, song_aug_path, aug_params)
+                        print(f"Generated augmentation {i} for {row['id']}")
+                    else:
+                        print(f"Skipping existing augmentation {i} for {row['id']}")
 
-                        processed_files[sub].append(aug_filename)
+                    processed_files.append((hum_aug, song_aug))
 
-                except Exception as e:
-                    print(f"Error processing {input_path}: {e}")
-                    continue
+                # Add to metadata
+                for hum_file, song_file in processed_files:
+                    output_metadata.append([row['id'], hum_file, song_file, row['info']])
 
-            # Only write to metadata if both hum and song have processed files
-            if processed_files["hum"] and processed_files["song"]:
-                for hum_file in processed_files["hum"]:
-                    for song_file in processed_files["song"]:
-                        output_metadata.append([row['id'], hum_file, song_file, row['info']])
+            except Exception as e:
+                print(f"Error processing {row['id']}: {e}")
+                continue
 
     output_metadata_path = os.path.join(output_folder, "metadata.csv")
     with open(output_metadata_path, "w", newline="") as csvfile:
