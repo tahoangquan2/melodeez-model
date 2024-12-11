@@ -6,7 +6,7 @@ from inference_2 import process_inference_data as process_model_inference
 from inference_3 import create_faiss_index
 from train_model_2 import main as train_model_1
 from search_1 import search_1
-# from search_2 import search_2
+from search_2 import search_2
 # from search_3 import search_3
 
 def run_training_pipeline():
@@ -45,10 +45,10 @@ def run_search_pipeline():
     MODEL_PATH = "checkpoints/resnet18_best.pth"
 
     print("Processing input audio files...")
-    search_1(INPUT_FOLDER, OUTPUT_FOLDER)
+    # search_1(INPUT_FOLDER, OUTPUT_FOLDER)
 
     print("Creating embeddings...")
-    # search_2(INPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
+    search_2(INPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
 
     print("Performing similarity search...")
     # search_3(INPUT_FOLDER, OUTPUT_FOLDER)
