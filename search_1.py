@@ -3,7 +3,7 @@ from inference_1 import process_file
 from pydub import AudioSegment
 
 def search_1(input_folder, output_folder):
-    # Ensure output folder exists
+    output_folder = os.path.join(output_folder, "processed")
     os.makedirs(output_folder, exist_ok=True)
 
     print("Starting audio processing...")
