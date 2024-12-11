@@ -10,7 +10,6 @@ import librosa
 import joblib
 from librosa.filters import mel as librosa_mel_fn
 
-# Existing preprocessing functions remain the same
 def is_valid_sound(sound, min_dur=0.5, max_dur=None):
     dur = len(sound) / 1000
     return min_dur < dur and (max_dur is None or dur < max_dur)
@@ -25,7 +24,8 @@ def adjust_volume(sound, target_dBFS=-20.0):
 def process_file(input_path, output_path, audio_format="mp3", min_dur=0.5, max_dur=None, target_dBFS=-20.0):
     try:
         if not os.path.isfile(input_path):
-            raise FileNotFoundError(f"{input_path} not found")
+            print(f"{input_path} not found")
+            return False
 
         sound = AudioSegment.from_file(input_path, format=audio_format)
         volume_adjusted_sound = adjust_volume(sound, target_dBFS)
@@ -135,7 +135,6 @@ def process_inference_step2(input_folder, output_folder):
 
     print("Step 2 processing complete.")
 
-# New functions for Step 3 (converting to npy)
 def process_audio_to_mel(audio, sr=22050, n_mels=80, n_fft=1024, hop_length=256, win_length=1024,
                         fmin=0.0, fmax=8000.0):
     waveform = torch.FloatTensor(audio)
@@ -205,7 +204,6 @@ def process_inference_step3(input_folder, output_folder):
     print("Step 3 processing complete.")
 
 def process_inference_data(data_folder, output_folder):
-    """Main function to run all preprocessing steps"""
     print("Running step 1: Audio preprocessing...")
     process_inference_step1(data_folder, output_folder)
 
