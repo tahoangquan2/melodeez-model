@@ -35,7 +35,15 @@ Before running the pipeline, verify that the following folders exist:
   data/
     hum/
     song/
-    metadata.csv
+    metadata.csv (id, hum, song, info)
+  ```
+
+- **For Inferencing:**
+
+  ```
+  song/
+    song/
+    metadata.csv (id, song, info)
   ```
 
 - **For Searching:**
