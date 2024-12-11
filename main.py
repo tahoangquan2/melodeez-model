@@ -7,6 +7,7 @@ from inference_3 import main as create_faiss_index
 from train_model_2 import main as train_model_1
 from search_1 import search_1
 from search_2 import search_2
+from search_3 import search_3
 
 def run_training_pipeline():
     DATA_FOLDER = "data"
@@ -47,7 +48,10 @@ def run_search_pipeline():
     # search_1(INPUT_FOLDER, OUTPUT_FOLDER)
 
     print("Creating embeddings...")
-    search_2(INPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
+    # search_2(INPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
+
+    print("Performing similarity search...")
+    search_3(INPUT_FOLDER, OUTPUT_FOLDER)
 
 if __name__ == "__main__":
     import sys
