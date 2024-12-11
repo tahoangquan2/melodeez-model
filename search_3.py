@@ -4,6 +4,7 @@ import os
 import json
 from tqdm import tqdm
 import csv
+from collections import defaultdict
 
 def load_faiss_index(index_path):
     """Load the FAISS index from file"""
@@ -41,13 +42,14 @@ def load_metadata(metadata_path):
         print(f"Error loading metadata: {e}")
         return None
 
-def search_3(input_folder, output_folder, top_k=5):
+def search_3(input_folder, output_folder, top_k=20, search_k=30):
     """
     Perform similarity search using the query embeddings
     Args:
         input_folder: folder containing query embeddings
         output_folder: folder to save search results
-        top_k: number of similar songs to return (default: 5)
+        top_k: number of unique similar songs to return (default: 5)
+        search_k: number of initial results to fetch (should be > top_k to account for duplicates)
     """
     # Set up paths
     query_folder = os.path.join(input_folder, "embedding")
@@ -65,7 +67,7 @@ def search_3(input_folder, output_folder, top_k=5):
     if mappings is None:
         return
 
-    # Fix: Convert string keys to integers for index_to_id
+    # Convert string keys to integers for index_to_id
     index_to_id = {}
     for k, v in mappings['index_to_id'].items():
         try:
@@ -95,24 +97,36 @@ def search_3(input_folder, output_folder, top_k=5):
             query_embedding = np.load(query_path)
 
             # Ensure embedding is in the correct shape
-            if len(query_embedding.shape) == 3:  # If shape is (1, 1, dim)
+            if len(query_embedding.shape) == 3:
                 query_embedding = query_embedding.reshape(1, -1)
 
-            # Perform search
-            distances, indices = index.search(query_embedding, top_k)
+            # Perform search with larger k to account for duplicates
+            distances, indices = index.search(query_embedding, search_k)
 
-            # Format results
-            query_results = []
-            for i in range(top_k):
+            # Group results by song_id and keep the best distance for each
+            song_distances = defaultdict(lambda: float('inf'))
+            song_indices = {}
+
+            for i in range(search_k):
                 idx = indices[0][i]
                 distance = distances[0][i]
 
-                # Fix: Use integer index directly
                 if idx not in index_to_id:
-                    print(f"Warning: Index {idx} not found in mappings")
                     continue
 
                 song_id = index_to_id[idx]
+
+                # Keep only the best distance for each song_id
+                if distance < song_distances[song_id]:
+                    song_distances[song_id] = distance
+                    song_indices[song_id] = idx
+
+            # Sort songs by their best distance and take top_k unique songs
+            top_songs = sorted(song_distances.items(), key=lambda x: x[1])[:top_k]
+
+            # Format results
+            query_results = []
+            for rank, (song_id, distance) in enumerate(top_songs, 1):
                 if song_id not in metadata:
                     print(f"Warning: Song ID {song_id} not found in metadata")
                     continue
@@ -120,7 +134,7 @@ def search_3(input_folder, output_folder, top_k=5):
                 song_info = metadata[song_id]
 
                 query_results.append({
-                    'rank': i + 1,
+                    'rank': rank,
                     'song_id': song_id,
                     'distance': float(distance),
                     'song_name': song_info['song'],
