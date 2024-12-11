@@ -2,7 +2,6 @@ import os
 from pydub import AudioSegment, effects
 import csv
 from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor
 
 def is_valid_sound(sound, min_dur=0.5, max_dur=None):
     dur = len(sound) / 1000
@@ -32,44 +31,35 @@ def process_file(input_path, output_path, audio_format="mp3", min_dur=0.5, max_d
         print(f"Error processing {input_path}: {e}")
         return False
 
-def process_row(row, data_folder, output_folder, target_dBFS):
-    hum_file = os.path.splitext(row['hum'])[0] + ".mp3"
-    song_file = os.path.splitext(row['song'])[0] + ".mp3"
-    song_info = row['info']
-
-    hum_input = os.path.join(data_folder, "hum", row['hum'])
-    song_input = os.path.join(data_folder, "song", row['song'])
-    hum_output = os.path.join(output_folder, "hum", hum_file)
-    song_output = os.path.join(output_folder, "song", song_file)
-
-    hum_processed = process_file(hum_input, hum_output, audio_format="m4a", target_dBFS=target_dBFS)
-    song_processed = process_file(song_input, song_output, audio_format="mp3", target_dBFS=target_dBFS)
-
-    if hum_processed and song_processed:
-        return [row['id'], hum_file, song_file, song_info]
-    return None
-
 def process_data(data_folder, output_folder, target_dBFS=-20.0):
     output_folder = os.path.join(output_folder, "output1")
-    os.makedirs(os.path.join(output_folder, "hum"), exist_ok=True)
-    os.makedirs(os.path.join(output_folder, "song"), exist_ok=True)
-
+    os.makedirs(output_folder, exist_ok=True)
     metadata_path = os.path.join(data_folder, "metadata.csv")
-
     output_metadata = []
+
     with open(metadata_path, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
-        rows = list(reader)
+        for row in tqdm(reader, desc="Processing Files"):
+            hum_file = os.path.splitext(row['hum'])[0] + ".mp3"
+            song_file = os.path.splitext(row['song'])[0] + ".mp3"
+            song_info = row['info']
 
-    # Parallel processing
-    with ProcessPoolExecutor() as executor:
-        futures = [executor.submit(process_row, row, data_folder, output_folder, target_dBFS) for row in rows]
-        for future in tqdm(futures, desc="Processing Files"):
-            result = future.result()
-            if result is not None:
-                output_metadata.append(result)
+            hum_input = os.path.join(data_folder, "hum", row['hum'])
+            song_input = os.path.join(data_folder, "song", row['song'])
+            hum_output = os.path.join(output_folder, "hum", hum_file)
+            song_output = os.path.join(output_folder, "song", song_file)
 
-    # Write metadata
+            os.makedirs(os.path.dirname(hum_output), exist_ok=True)
+            os.makedirs(os.path.dirname(song_output), exist_ok=True)
+
+            hum_processed = process_file(hum_input, hum_output, audio_format="m4a", target_dBFS=target_dBFS)
+            song_processed = process_file(song_input, song_output, audio_format="mp3", target_dBFS=target_dBFS)
+
+            if hum_processed and song_processed:
+                output_metadata.append([row['id'], hum_file, song_file, song_info])
+            else:
+                print(f"Skipping {row['id']} due to processing failure.")
+
     output_metadata_file = os.path.join(output_folder, "metadata.csv")
     with open(output_metadata_file, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
