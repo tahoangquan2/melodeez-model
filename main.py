@@ -5,6 +5,7 @@ from inference_1 import process_inference_data
 from inference_2 import process_inference_data as process_model_inference
 from inference_3 import main as create_faiss_index
 from train_model_2 import main as train_model_1
+from search_1 import search_1
 
 def run_training_pipeline():
     DATA_FOLDER = "data"
@@ -28,16 +29,20 @@ def run_inference_pipeline():
     MODEL_PATH = "checkpoints/resnet18_best.pth"
 
     print("Starting inference preprocessing pipeline...")
-    # process_inference_data(INPUT_FOLDER, OUTPUT_FOLDER)
+    process_inference_data(INPUT_FOLDER, OUTPUT_FOLDER)
 
     print("Running model inference...")
-    # process_model_inference(OUTPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
+    process_model_inference(OUTPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
 
     print("Creating FAISS index...")
     create_faiss_index()
 
 def run_search_pipeline():
-    print("Search functionality not yet implemented")
+    INPUT_FOLDER = "search"
+    OUTPUT_FOLDER = "search/processed"
+
+    print("Running search pipeline...")
+    search_1(INPUT_FOLDER, OUTPUT_FOLDER)
 
 if __name__ == "__main__":
     import sys
