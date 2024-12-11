@@ -3,13 +3,8 @@ from process_audio_2 import process_data as process_data_2
 from process_audio_3 import process_data as process_data_3
 from inference_1 import process_inference_data
 from inference_2 import process_inference_data as process_model_inference
+from inference_3 import main as create_faiss_index
 from train_model_2 import main as train_model_1
-import os
-
-def ensure_directories_exist():
-    directories = ["data", "output"]
-    for directory in directories:
-        os.makedirs(directory, exist_ok=True)
 
 def run_training_pipeline():
     DATA_FOLDER = "data"
@@ -28,7 +23,7 @@ def run_training_pipeline():
     train_model_1()
 
 def run_inference_pipeline():
-    INPUT_FOLDER = "song"
+    INPUT_FOLDER = "output"
     OUTPUT_FOLDER = "output"
     MODEL_PATH = "checkpoints/resnet18_best.pth"
 
@@ -36,15 +31,25 @@ def run_inference_pipeline():
     # process_inference_data(INPUT_FOLDER, OUTPUT_FOLDER)
 
     print("Running model inference...")
-    process_model_inference(OUTPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
+    # process_model_inference(OUTPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
 
-    print("Inference pipeline complete.")
+    print("Creating FAISS index...")
+    create_faiss_index()
+
+def run_search_pipeline():
+    print("Search functionality not yet implemented")
 
 if __name__ == "__main__":
     import sys
-    ensure_directories_exist()
 
-    if len(sys.argv) > 1 and sys.argv[1] == "inference":
-        run_inference_pipeline()
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "inference":
+            run_inference_pipeline()
+        elif sys.argv[1] == "search":
+            run_search_pipeline()
+        elif sys.argv[1] == "preprocess":
+            run_training_pipeline()
+        else:
+            print("Invalid argument. Use 'inference' or 'search' or 'preprocess'")
     else:
-        run_training_pipeline()
+        print("No argument provided. Use 'inference' or 'search' or 'preprocess'")
