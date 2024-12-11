@@ -7,20 +7,20 @@ from inference_3 import create_faiss_index
 from train_model_2 import main as train_model_1
 from search_1 import search_1
 from search_2 import search_2
-# from search_3 import search_3
+from search_3 import search_3
 
 def run_training_pipeline():
     DATA_FOLDER = "data"
     OUTPUT_FOLDER = "output"
 
     print("Running process_audio_1...")
-    # process_data_1(DATA_FOLDER, OUTPUT_FOLDER)
+    process_data_1(DATA_FOLDER, OUTPUT_FOLDER)
 
     print("Running process_audio_2...")
-    # process_data_2(OUTPUT_FOLDER, OUTPUT_FOLDER)
+    process_data_2(OUTPUT_FOLDER, OUTPUT_FOLDER)
 
     print("Running process_audio_3...")
-    # process_data_3(OUTPUT_FOLDER, OUTPUT_FOLDER)
+    process_data_3(OUTPUT_FOLDER, OUTPUT_FOLDER)
 
     print("Starting model training...")
     train_model_1()
@@ -31,10 +31,10 @@ def run_inference_pipeline():
     MODEL_PATH = "checkpoints/resnet18_best.pth"
 
     print("Starting inference preprocessing pipeline...")
-    # process_inference_data(INPUT_FOLDER, OUTPUT_FOLDER)
+    process_inference_data(INPUT_FOLDER, OUTPUT_FOLDER)
 
     print("Running model inference...")
-    # process_model_inference(OUTPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
+    process_model_inference(OUTPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
 
     print("Creating FAISS index...")
     create_faiss_index(OUTPUT_FOLDER)
@@ -48,10 +48,10 @@ def run_search_pipeline():
     # search_1(INPUT_FOLDER, OUTPUT_FOLDER)
 
     print("Creating embeddings...")
-    search_2(INPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
+    # search_2(INPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
 
     print("Performing similarity search...")
-    # search_3(INPUT_FOLDER, OUTPUT_FOLDER)
+    search_3(INPUT_FOLDER, OUTPUT_FOLDER)
 
 if __name__ == "__main__":
     import sys

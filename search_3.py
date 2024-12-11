@@ -2,165 +2,163 @@ import faiss
 import numpy as np
 import os
 import json
-from tqdm import tqdm
 import csv
 from collections import defaultdict
+from tqdm import tqdm
 
 def load_faiss_index(index_path):
-    """Load the FAISS index from file"""
     try:
         index = faiss.read_index(index_path)
-        print(f"Successfully loaded FAISS index from {index_path}")
         return index
     except Exception as e:
-        print(f"Error loading FAISS index: {e}")
-        return None
-
-def load_mappings(mapping_path):
-    """Load the index to ID mappings"""
-    try:
-        with open(mapping_path, 'r') as f:
-            mappings = json.load(f)
-        return mappings
-    except Exception as e:
-        print(f"Error loading mappings: {e}")
-        return None
+        raise RuntimeError(f"Failed to load FAISS index: {e}")
 
 def load_metadata(metadata_path):
-    """Load the original metadata to get song information"""
+    if not os.path.exists(metadata_path):
+        raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
+
     metadata = {}
-    try:
-        with open(metadata_path, 'r') as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                metadata[row['id']] = {
-                    'song': row['song'],
-                    'info': row['info']
-                }
-        return metadata
-    except Exception as e:
-        print(f"Error loading metadata: {e}")
-        return None
+    with open(metadata_path, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            metadata[row['id']] = {
+                'song': row['song'],
+                'info': row['info']
+            }
+    return metadata
 
-def search_3(input_folder, output_folder, top_k=20, search_k=30):
-    """
-    Perform similarity search using the query embeddings
-    Args:
-        input_folder: folder containing query embeddings
-        output_folder: folder to save search results
-        top_k: number of unique similar songs to return (default: 5)
-        search_k: number of initial results to fetch (should be > top_k to account for duplicates)
-    """
-    # Set up paths
+def load_mappings(mapping_path):
+    if not os.path.exists(mapping_path):
+        raise FileNotFoundError(f"Mapping file not found: {mapping_path}")
+
+    with open(mapping_path, 'r') as f:
+        try:
+            mappings = json.load(f)
+            if 'metadata' not in mappings:
+                raise ValueError("Missing metadata in mapping file")
+
+            return {int(k): v['id'] for k, v in mappings['metadata'].items()}
+        except json.JSONDecodeError:
+            raise ValueError("Invalid JSON format in mapping file")
+
+def validate_and_reshape_embedding(embedding, expected_dim=512):
+    if len(embedding.shape) == 1:
+        embedding = embedding.reshape(1, -1)
+    elif len(embedding.shape) == 2:
+        if embedding.shape[0] != 1:
+            embedding = embedding.reshape(1, -1)
+    elif len(embedding.shape) == 3:
+        embedding = embedding.reshape(1, -1)
+
+    if embedding.shape[1] != expected_dim:
+        raise ValueError(f"Invalid embedding dimension: {embedding.shape[1]}, expected {expected_dim}")
+
+    return embedding
+
+def search_3(input_folder, output_folder, top_k=20):
+    search_k = top_k * 3
     query_folder = os.path.join(input_folder, "embedding")
-    index_path = os.path.join("output", "output8", "song_index.faiss")
-    mapping_path = os.path.join("output", "output8", "index_mapping.json")
-    metadata_path = os.path.join("output", "output7", "metadata.csv")
+    results_folder = os.path.join(output_folder, "results")
+    os.makedirs(results_folder, exist_ok=True)
 
-    # Load FAISS index
-    index = load_faiss_index(index_path)
-    if index is None:
-        return
+    error_log = defaultdict(list)
+    skipped_files = []
 
-    # Load mappings
-    mappings = load_mappings(mapping_path)
-    if mappings is None:
-        return
+    try:
+        index_path = os.path.join("output", "output8", "song_index.faiss")
+        mapping_path = os.path.join("output", "output8", "index_mapping.json")
+        metadata_path = os.path.join("output", "output7", "metadata.csv")
 
-    # Convert string keys to integers for index_to_id
-    index_to_id = {}
-    for k, v in mappings['index_to_id'].items():
-        try:
-            index_to_id[int(k)] = v
-        except ValueError:
-            print(f"Warning: Invalid index mapping key: {k}")
-            continue
+        print(f"Loading index from: {index_path}")
+        print(f"Loading mappings from: {mapping_path}")
+        print(f"Loading metadata from: {metadata_path}")
 
-    # Load metadata
-    metadata = load_metadata(metadata_path)
-    if metadata is None:
-        return
+        if not all(os.path.exists(p) for p in [index_path, mapping_path, metadata_path]):
+            missing = [p for p in [index_path, mapping_path, metadata_path] if not os.path.exists(p)]
+            raise FileNotFoundError(f"Missing required files: {missing}")
 
-    # Create output directory
-    os.makedirs(output_folder, exist_ok=True)
-    results_path = os.path.join(output_folder, "search_results.json")
+        index = load_faiss_index(index_path)
+        index_to_id = load_mappings(mapping_path)
+        metadata = load_metadata(metadata_path)
 
-    # Process each query embedding
-    results = {}
+        print(f"Loaded index with dimension: {index.d}")
+        print(f"Number of mappings: {len(index_to_id)}")
+        print(f"Number of metadata entries: {len(metadata)}")
+    except Exception as e:
+        raise RuntimeError(f"Failed to load required files: {e}")
+
     query_files = [f for f in os.listdir(query_folder) if f.endswith('_embedding.npy')]
+    print(f"Found {len(query_files)} query files")
+    results = {}
 
-    print("Performing similarity search...")
-    for query_file in tqdm(query_files):
+    for query_file in tqdm(query_files, desc="Processing queries"):
         try:
-            # Load query embedding
             query_path = os.path.join(query_folder, query_file)
             query_embedding = np.load(query_path)
+            print(f"\nLoaded query embedding shape: {query_embedding.shape}")
 
-            # Ensure embedding is in the correct shape
-            if len(query_embedding.shape) == 3:
-                query_embedding = query_embedding.reshape(1, -1)
+            query_embedding = validate_and_reshape_embedding(query_embedding)
+            print(f"Reshaped query embedding shape: {query_embedding.shape}")
 
-            # Perform search with larger k to account for duplicates
-            distances, indices = index.search(query_embedding, search_k)
+            distances, indices = index.search(query_embedding.astype(np.float32), search_k)
+            print(f"Search returned {len(indices[0])} results")
 
-            # Group results by song_id and keep the best distance for each
-            song_distances = defaultdict(lambda: float('inf'))
-            song_indices = {}
-
-            for i in range(search_k):
-                idx = indices[0][i]
-                distance = distances[0][i]
-
+            unique_songs = {}
+            for idx, distance in zip(indices[0], distances[0]):
                 if idx not in index_to_id:
+                    error_log["invalid_indices"].append(idx)
                     continue
 
                 song_id = index_to_id[idx]
-
-                # Keep only the best distance for each song_id
-                if distance < song_distances[song_id]:
-                    song_distances[song_id] = distance
-                    song_indices[song_id] = idx
-
-            # Sort songs by their best distance and take top_k unique songs
-            top_songs = sorted(song_distances.items(), key=lambda x: x[1])[:top_k]
-
-            # Format results
-            query_results = []
-            for rank, (song_id, distance) in enumerate(top_songs, 1):
                 if song_id not in metadata:
-                    print(f"Warning: Song ID {song_id} not found in metadata")
+                    error_log["missing_metadata"].append(song_id)
                     continue
 
-                song_info = metadata[song_id]
+                if song_id not in unique_songs or distance < unique_songs[song_id]['distance']:
+                    unique_songs[song_id] = {
+                        'distance': float(distance),
+                        'confidence': float(1 / (1 + distance))
+                    }
 
+            sorted_results = sorted(unique_songs.items(), key=lambda x: x[1]['distance'])[:top_k]
+            query_results = []
+
+            for rank, (song_id, metrics) in enumerate(sorted_results, 1):
                 query_results.append({
                     'rank': rank,
                     'song_id': song_id,
-                    'distance': float(distance),
-                    'song_name': song_info['song'],
-                    'info': song_info['info']
+                    'song_name': metadata[song_id]['song'],
+                    'info': metadata[song_id]['info'],
+                    'distance': metrics['distance'],
+                    'confidence': metrics['confidence']
                 })
 
-            # Store results for this query
             query_name = os.path.splitext(query_file)[0].replace('_embedding', '')
-            results[query_name] = query_results
+            results[query_name] = {
+                'matches': query_results,
+                'total_unique_matches': len(unique_songs),
+                'actual_matches_returned': len(query_results)
+            }
 
         except Exception as e:
-            print(f"Error processing query {query_file}: {e}")
+            print(f"\nError processing {query_file}: {str(e)}")
+            skipped_files.append({'file': query_file, 'error': str(e)})
             continue
 
-    # Save results
-    try:
-        with open(results_path, 'w') as f:
-            json.dump(results, f, indent=2)
-        print(f"Search results saved to {results_path}")
-    except Exception as e:
-        print(f"Error saving results: {e}")
+    results_path = os.path.join(results_folder, "search_results.json")
+    error_path = os.path.join(results_folder, "search_errors.json")
 
-def main():
-    input_folder = "search"
-    output_folder = "search/results"
-    search_3(input_folder, output_folder)
+    with open(results_path, 'w') as f:
+        json.dump(results, f, indent=2)
 
-if __name__ == "__main__":
-    main()
+    error_report = {
+        'skipped_files': skipped_files,
+        'error_logs': dict(error_log)
+    }
+    with open(error_path, 'w') as f:
+        json.dump(error_report, f, indent=2)
+
+    print(f"\nSearch complete. Results saved to {results_path}")
+    print(f"Processed {len(results)} queries successfully")
+    if skipped_files:
+        print(f"Skipped {len(skipped_files)} files. Check {error_path} for details")
