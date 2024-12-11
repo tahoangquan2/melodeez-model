@@ -65,7 +65,7 @@ class SEBlock(nn.Module):
 class CustomResNet(nn.Module):
     def __init__(self, feature_dim=512):
         super(CustomResNet, self).__init__()
-        model = models.resnet18(pretrained=False)
+        model = models.resnet18(weights=None)
         model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
 
         self.features = nn.Sequential(*list(model.children())[:-2])
@@ -111,12 +111,12 @@ def read_val(path_val, data_root):
     dict_data = []
     with open(path_val, 'r') as files:
         for line in files.read().splitlines():
-            typ = 'song' if 'song' in line else 'hum'
-            filepath, lbl = line.split(' ')
+            filepath, label = line.split(' ')
+            typ = 'song' if 'song' in filepath else 'hum'
             dict_data.append({
                 'path': os.path.join(data_root, filepath),
-                'label': lbl,
-                'type': typ
+                'type': typ,
+                'id': int(label)
             })
     return dict_data
 
@@ -125,8 +125,10 @@ def calculate_mrr(model, data_val, input_shape):
     device = next(model.parameters()).device
     index = faiss.IndexFlatL2(512)
 
-    song_features, song_labels = [], []
-    hum_features, hum_labels = [], []
+    song_features = []
+    song_ids = []
+    hum_features = []
+    hum_ids = []
 
     with torch.no_grad():
         for item in data_val:
@@ -143,10 +145,10 @@ def calculate_mrr(model, data_val, input_shape):
 
             if item['type'] == 'song':
                 song_features.append(feature)
-                song_labels.append(item['label'])
+                song_ids.append(item['id'])
             else:
                 hum_features.append(feature)
-                hum_labels.append(item['label'])
+                hum_ids.append(item['id'])
 
     if not song_features or not hum_features:
         return 0.0
@@ -157,13 +159,22 @@ def calculate_mrr(model, data_val, input_shape):
     mrr_sum = 0
     distances, indices = index.search(hum_features, 10)
 
-    for i, label in enumerate(hum_labels):
+    for i, query_id in enumerate(hum_ids):
         for rank, idx in enumerate(indices[i]):
-            if song_labels[idx] == label:
+            if song_ids[idx] == query_id:
                 mrr_sum += 1.0 / (rank + 1)
                 break
 
-    return mrr_sum / len(hum_labels)
+    mrr = mrr_sum / len(hum_ids)
+
+    print(f"\nMRR Evaluation Statistics:")
+    print(f"Total unique queries: {len(set(hum_ids))}")
+    print(f"Total unique songs: {len(set(song_ids))}")
+    print(f"Total queries: {len(hum_ids)}")
+    print(f"Total songs in index: {len(song_ids)}")
+    print(f"Final MRR: {mrr:.4f}")
+
+    return mrr
 
 def train_model_3(opt):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
