@@ -2,12 +2,9 @@ import os
 from pydub import AudioSegment, effects
 import csv
 from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 import torch
-import torchaudio
 import librosa
-import joblib
 from librosa.filters import mel as librosa_mel_fn
 
 def is_valid_sound(sound, min_dur=0.5, max_dur=None):
@@ -63,13 +60,10 @@ def process_inference_step1(data_folder, output_folder, target_dBFS=-20.0):
         reader = csv.DictReader(csvfile)
         rows = list(reader)
 
-    with ProcessPoolExecutor() as executor:
-        futures = [executor.submit(process_row_inference, row, data_folder, output_folder, target_dBFS)
-                  for row in rows]
-        for future in tqdm(futures, desc="Processing Files"):
-            result = future.result()
-            if result is not None:
-                output_metadata.append(result)
+    for row in tqdm(rows, desc="Processing Files"):
+        result = process_row_inference(row, data_folder, output_folder, target_dBFS)
+        if result is not None:
+            output_metadata.append(result)
 
     output_metadata_file = os.path.join(output_folder, "metadata.csv")
     with open(output_metadata_file, "w", newline="") as csvfile:
@@ -177,22 +171,11 @@ def process_inference_step3(input_folder, output_folder):
         reader = csv.DictReader(csvfile)
         rows = list(reader)
 
-        # Process audio files to mel spectrograms
-        input_files = []
-        output_files = []
-        for row in rows:
+        for row in tqdm(rows, desc="Processing Audio Files"):
             input_path = os.path.join(input_folder, "song", row['song'])
             output_path = os.path.join(output_folder, "song", f"{os.path.splitext(row['song'])[0]}.npy")
-            input_files.append(input_path)
-            output_files.append(output_path)
-            output_metadata.append([row['id'], f"{os.path.splitext(row['song'])[0]}.npy", row['info']])
-
-        # Process files in parallel
-        jobs = [
-            joblib.delayed(process_audio_file)(input_path, output_path)
-            for input_path, output_path in zip(input_files, output_files)
-        ]
-        joblib.Parallel(n_jobs=4, verbose=1)(jobs)
+            if process_audio_file(input_path, output_path):
+                output_metadata.append([row['id'], f"{os.path.splitext(row['song'])[0]}.npy", row['info']])
 
     # Write metadata
     output_metadata_file = os.path.join(output_folder, "metadata.csv")
