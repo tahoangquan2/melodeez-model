@@ -29,9 +29,9 @@ def train_model_1(opt):
 
     train_dataset = AudioDataset(opt.train_root, opt.train_list, opt.input_shape)
     trainloader = DataLoader(train_dataset,
-                           batch_size=32,
+                           batch_size=opt.train_batch_size,
                            shuffle=True,
-                           num_workers=4,
+                           num_workers=opt.num_workers,
                            pin_memory=True)
 
     print(f"Train dataset size: {len(train_dataset)}")
@@ -46,11 +46,15 @@ def train_model_1(opt):
         print(f"Warning: Could not get sample batch: {e}")
 
     print("Initializing model...")
-    model = CustomResNet(feature_dim=512)
+    model = CustomResNet(feature_dim=opt.num_classes)
     model.to(device)
     model = DataParallel(model)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.0005)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=opt.lr,
+        weight_decay=opt.weight_decay
+    )
     criterion = torch.nn.CrossEntropyLoss()
     scheduler = CosineAnnealingLR(optimizer, T_max=50)
 

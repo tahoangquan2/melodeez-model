@@ -3,14 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import os
-import time
-from torch.utils import data
-from torch.nn import DataParallel
-from torch.optim.lr_scheduler import CosineAnnealingLR
-from torch.nn import Parameter
-import math
-import visdom
-from sklearn.preprocessing import normalize
 from torch.utils.data import Dataset
 import faiss
 import torchvision.models as models
@@ -175,76 +167,3 @@ def calculate_mrr(model, data_val, input_shape):
     print(f"Final MRR: {mrr:.4f}")
 
     return mrr
-
-def train_model_3(opt):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    train_dataset = AudioDataset(opt.train_root, opt.train_list, opt.input_shape)
-    trainloader = data.DataLoader(train_dataset,
-                                batch_size=32,
-                                shuffle=True,
-                                num_workers=4,
-                                pin_memory=True)
-
-    print(f'{len(trainloader)} train iters per epoch')
-
-    model = CustomResNet(feature_dim=512)
-    model = model.to(device)
-    model = DataParallel(model)
-
-    optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.0005)
-    scheduler = CosineAnnealingLR(optimizer, T_max=50)
-
-    mrr_best = 0
-    patience = 5
-    patience_counter = 0
-
-    for epoch in range(opt.max_epoch):
-        model.train()
-        total_loss = 0
-
-        try:
-            for i, (data, label) in enumerate(trainloader):
-                data = data.to(device)
-                label = label.to(device)
-
-                feature = model(data)
-                criterion = nn.CrossEntropyLoss()
-                loss = criterion(feature, label)
-
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-
-                total_loss += loss.item()
-
-                if i % opt.print_freq == 0:
-                    print(f'Epoch: [{epoch}][{i}/{len(trainloader)}]\tLoss: {loss.item():.4f}')
-
-            avg_loss = total_loss / len(trainloader)
-            print(f'Epoch {epoch}: Average Loss = {avg_loss:.4f}')
-
-            if (epoch + 1) % 5 == 0:
-                data_val = read_val(opt.val_list, opt.train_root)
-                mrr = calculate_mrr(model, data_val, opt.input_shape)
-                print(f'Validation MRR = {mrr:.4f}')
-
-                if mrr > mrr_best:
-                    mrr_best = mrr
-                    torch.save(model.state_dict(), os.path.join(opt.checkpoints_path, 'best_model.pth'))
-                    patience_counter = 0
-                else:
-                    patience_counter += 1
-
-                if patience_counter >= patience:
-                    print('Early stopping triggered')
-                    break
-
-            scheduler.step()
-
-        except Exception as e:
-            print(f"Error in epoch {epoch}: {e}")
-            continue
-
-    print(f"Training completed. Best MRR: {mrr_best:.4f}")
-    return model
