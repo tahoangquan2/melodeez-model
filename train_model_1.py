@@ -1,7 +1,6 @@
 from __future__ import print_function
 import os
 import torch
-import numpy as np
 from torch.utils.data import DataLoader
 import time
 from torch.nn import DataParallel
@@ -32,7 +31,9 @@ def train_model_1(opt):
                            batch_size=opt.train_batch_size,
                            shuffle=True,
                            num_workers=opt.num_workers,
-                           pin_memory=True)
+                           pin_memory=True,
+                           persistent_workers=True,
+                           prefetch_factor=2)
 
     print(f"Train dataset size: {len(train_dataset)}")
     print(f"{len(trainloader)} train iters per epoch")
@@ -62,7 +63,7 @@ def train_model_1(opt):
     start = time.time()
     mrr_best = 0
     patience_counter = 0
-    max_patience = 5
+    max_patience = opt.max_patience
 
     for epoch in range(1, opt.max_epoch + 1):
         model.train()
@@ -70,6 +71,9 @@ def train_model_1(opt):
         batch_count = 0
 
         for batch_idx, (data_input, label) in enumerate(trainloader):
+            # print(f"Unique labels in batch: {torch.unique(label)}")
+            # print(f"Min label: {label.min()}, Max label: {label.max()}")
+
             try:
                 data_input = data_input.to(device)
                 label = label.to(device).long()
@@ -100,11 +104,10 @@ def train_model_1(opt):
                 print(f"Error in training batch {batch_idx}: {e}")
                 continue
 
-        scheduler.step()
         epoch_loss /= batch_count
         print(f"Epoch {epoch} - Average Loss: {epoch_loss:.4f}")
 
-        if epoch % 5 == 0 or epoch == opt.max_epoch:
+        if epoch % opt.val_freq == 0 or epoch == opt.max_epoch:
             try:
                 print('Calculating MRR...')
                 save_model(model, opt.checkpoints_path, opt.backbone, 'latest')
@@ -113,6 +116,7 @@ def train_model_1(opt):
                 data_val = read_val(opt.val_list, opt.train_root)
                 mrr = calculate_mrr(model, data_val, opt.input_shape)
                 print(f'Epoch {epoch}: MRR = {mrr:.4f}')
+                scheduler.step()
 
                 if mrr > mrr_best:
                     mrr_best = mrr

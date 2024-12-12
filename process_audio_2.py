@@ -5,7 +5,6 @@ import os
 import random
 from tqdm import tqdm
 import csv
-from scipy import signal
 
 def pitch_shift(audio, sr, shift_steps):
     return librosa.effects.pitch_shift(audio, sr=sr, n_steps=shift_steps)
@@ -44,7 +43,6 @@ def check_existing_augmentations(base_name, aug_path, tries):
     return existing_augs
 
 def process_data(data_folder, output_folder, tries=5):
-    """Main processing function"""
     input_folder = os.path.join(data_folder, "output1")
     output_folder = os.path.join(output_folder, "output2")
     os.makedirs(output_folder, exist_ok=True)

@@ -2,37 +2,44 @@ import torch
 import numpy as np
 import os
 import csv
+from torch.nn import DataParallel
 from train_model_3 import CustomResNet
+from train_model_2 import Config
 from tqdm import tqdm
 import torch.nn.functional as F
 
 class EmbeddingGenerator:
-    def __init__(self, model_path, embedding_dim=512, device=None):
-        self.embedding_dim = embedding_dim
+    def __init__(self, model_path, device=None):
+        self.config = Config()
+        self.embedding_dim = self.config.num_classes
         self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {self.device}")
         self.model = self._initialize_model(model_path)
 
     def _initialize_model(self, model_path):
-        model = CustomResNet(feature_dim=512)
+        model = CustomResNet(feature_dim=self.config.num_classes,
+                           backbone=self.config.backbone)
         model = model.to(self.device)
+        model = DataParallel(model)
 
-        # Load trained weights
-        state_dict = torch.load(model_path, weights_only=True)
-        state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+        state_dict = torch.load(model_path, map_location=self.device, weights_only=True)
         model.load_state_dict(state_dict)
         model.eval()
         return model
 
-    def load_and_preprocess(self, npy_path, target_width=630):
+    def load_and_preprocess(self, npy_path):
         mel_spec = np.load(npy_path)
         mel_spec = torch.from_numpy(mel_spec).float()
         mel_spec = mel_spec.unsqueeze(0).unsqueeze(0)
 
-        # Resize to target width using interpolation
+        target_shape = (
+            self.config.input_shape[1],  # height
+            self.config.input_shape[2]   # width
+        )
+
         mel_spec = F.interpolate(
             mel_spec,
-            size=(80, target_width),
+            size=target_shape,
             mode='bilinear',
             align_corners=False
         )
@@ -42,10 +49,8 @@ class EmbeddingGenerator:
     def generate_embedding(self, input_tensor):
         with torch.no_grad():
             input_tensor = input_tensor.to(self.device)
-
             embedding = self.model(input_tensor)
 
-            # Validate embedding shape
             if embedding.shape[1] != self.embedding_dim:
                 raise ValueError(f"Invalid embedding dimension: {embedding.shape[1]}, expected {self.embedding_dim}")
 
@@ -72,7 +77,7 @@ def process_inference_data(input_folder, output_folder, model_path):
         reader = csv.DictReader(csvfile)
         rows = list(reader)
 
-        batch_size = 32
+        batch_size = generator.config.train_batch_size
         for i in tqdm(range(0, len(rows), batch_size), desc="Processing batches"):
             batch_rows = rows[i:i + batch_size]
 

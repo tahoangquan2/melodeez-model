@@ -1,11 +1,10 @@
-import torch
 import numpy as np
 import os
 import tempfile
 from inference_1 import process_audio_to_mel
-from inference_2 import CustomResNet, EmbeddingGenerator
+from inference_2 import EmbeddingGenerator
+from train_model_2 import Config
 import librosa
-import torch.nn.functional as F
 from tqdm import tqdm
 
 def process_batch(generator, batch_tensors):
@@ -15,7 +14,9 @@ def process_batch(generator, batch_tensors):
         embeddings.append(embedding)
     return np.vstack(embeddings)
 
-def search_2(input_folder, output_folder, model_path, batch_size=32):
+def search_2(input_folder, output_folder, model_path):
+    config = Config()
+
     input_folder = os.path.join(input_folder, "processed")
     output_folder = os.path.join(output_folder, "embedding")
     os.makedirs(output_folder, exist_ok=True)
@@ -40,6 +41,7 @@ def search_2(input_folder, output_folder, model_path, batch_size=32):
                 spec_path = os.path.join(temp_dir, f"{base_name}.npy")
                 embedding_path = os.path.join(output_folder, f"{base_name}_embedding.npy")
 
+                # Use standard sample rate of 22050
                 audio, sr = librosa.load(audio_path, sr=22050)
                 spec = process_audio_to_mel(audio, sr=sr)
                 np.save(spec_path, spec)
@@ -48,7 +50,7 @@ def search_2(input_folder, output_folder, model_path, batch_size=32):
                 batch_tensors.append(input_tensor)
                 batch_files.append(embedding_path)
 
-                if len(batch_tensors) >= batch_size:
+                if len(batch_tensors) >= config.train_batch_size:
                     embeddings = process_batch(generator, batch_tensors)
                     for emb, path in zip(embeddings, batch_files):
                         np.save(path, emb)

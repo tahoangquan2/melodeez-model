@@ -55,9 +55,13 @@ class SEBlock(nn.Module):
         return x * y
 
 class CustomResNet(nn.Module):
-    def __init__(self, feature_dim=512):
+    def __init__(self, feature_dim=512, backbone='resnet18'):
         super(CustomResNet, self).__init__()
-        model = models.resnet18(weights=None)
+        if backbone == 'resnet18':
+            model = models.resnet18(weights=None)
+        else:
+            raise ValueError(f"Unsupported backbone: {backbone}")
+
         model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
 
         self.features = nn.Sequential(*list(model.children())[:-2])
@@ -77,9 +81,12 @@ class CustomResNet(nn.Module):
         return F.normalize(x, p=2, dim=1)
 
 class AudioDataset(Dataset):
-    def __init__(self, root_dir, list_file, input_shape=(1, 80, 630)):
+    def __init__(self, root_dir, list_file, input_shape):
         self.root_dir = root_dir
-        self.input_shape = (input_shape[1], input_shape[2])
+        if isinstance(input_shape, tuple):
+            self.input_shape = (input_shape[1], input_shape[2])
+        else:
+            raise ValueError("input_shape must be a tuple of (channels, height, width)")
 
         with open(list_file, 'r') as f:
             self.samples = [(os.path.join(root_dir, line.split()[0]),
@@ -91,6 +98,7 @@ class AudioDataset(Dataset):
     def __getitem__(self, idx):
         npy_path, label = self.samples[idx]
         data = np.load(npy_path)
+        label = label - 1
         if data.shape[1] >= self.input_shape[1]:
             data = data[:, :self.input_shape[1]]
         else:
@@ -115,7 +123,9 @@ def read_val(path_val, data_root):
 def calculate_mrr(model, data_val, input_shape):
     model.eval()
     device = next(model.parameters()).device
-    index = faiss.IndexFlatL2(512)
+
+    feature_dim = model.module.fc.out_features if hasattr(model, 'module') else model.fc.out_features
+    index = faiss.IndexFlatL2(feature_dim)
 
     song_features = []
     song_ids = []

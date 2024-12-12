@@ -1,14 +1,15 @@
-import torch
 import numpy as np
 import os
 import csv
 import faiss
 import json
 from tqdm import tqdm
+from train_model_2 import Config
 
 class FAISSIndexBuilder:
-    def __init__(self, embedding_dim=512):
-        self.embedding_dim = embedding_dim
+    def __init__(self):
+        self.config = Config()
+        self.embedding_dim = self.config.num_classes
         self.embeddings = []
         self.metadata = {}
         self.failed_embeddings = []
@@ -16,7 +17,7 @@ class FAISSIndexBuilder:
     def validate_embedding(self, embedding, identifier):
         try:
             if embedding.shape[1] != self.embedding_dim:
-                print(f"Invalid embedding dimension for {identifier}: {embedding.shape[1]}")
+                print(f"Invalid embedding dimension for {identifier}: {embedding.shape[1]}, expected {self.embedding_dim}")
                 return False
             if not np.isfinite(embedding).all():
                 print(f"Invalid values in embedding for {identifier}")
@@ -68,19 +69,24 @@ def create_faiss_index(output_folder):
         print("Loading and validating embeddings...")
         with open(metadata_path, 'r') as f:
             reader = csv.DictReader(f)
-            for row in tqdm(list(reader)):
-                try:
-                    embedding_path = os.path.join(input_folder, "song", row['song'])
-                    if not os.path.exists(embedding_path):
-                        print(f"Embedding file not found: {embedding_path}")
-                        continue
+            rows = list(reader)
+            batch_size = index_builder.config.train_batch_size
 
-                    embedding = np.load(embedding_path)
-                    index_builder.add_embedding(embedding, row)
+            for i in tqdm(range(0, len(rows), batch_size)):
+                batch_rows = rows[i:i + batch_size]
+                for row in batch_rows:
+                    try:
+                        embedding_path = os.path.join(input_folder, "song", row['song'])
+                        if not os.path.exists(embedding_path):
+                            print(f"Embedding file not found: {embedding_path}")
+                            continue
 
-                except Exception as e:
-                    print(f"Error processing {row['song']}: {e}")
-                    index_builder.failed_embeddings.append(row['song'])
+                        embedding = np.load(embedding_path)
+                        index_builder.add_embedding(embedding, row)
+
+                    except Exception as e:
+                        print(f"Error processing {row['song']}: {e}")
+                        index_builder.failed_embeddings.append(row['song'])
 
         print("Building FAISS index...")
         index = index_builder.build_index()
@@ -119,7 +125,7 @@ def batch_similarity_search(index_path, mapping_path, query_embeddings, k=10):
 
         if len(query_embeddings.shape) == 2:
             if query_embeddings.shape[1] != mapping_data['embedding_dim']:
-                raise ValueError(f"Invalid query embedding dimension: {query_embeddings.shape[1]}")
+                raise ValueError(f"Invalid query embedding dimension: {query_embeddings.shape[1]}, expected {mapping_data['embedding_dim']}")
         else:
             raise ValueError("Query embeddings must be 2-dimensional")
 

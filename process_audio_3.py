@@ -1,12 +1,10 @@
 import os
 import numpy as np
 import torch
-import torchaudio
 import librosa
 import joblib
 import csv
 import random
-from tqdm import tqdm
 from librosa.filters import mel as librosa_mel_fn
 
 def process_audio(audio, sr=22050, n_mels=80, n_fft=1024, hop_length=256, win_length=1024,

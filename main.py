@@ -8,19 +8,22 @@ from train_model_2 import main as train_model_1
 from search_1 import search_1
 from search_2 import search_2
 from search_3 import search_3
+import os
+
+os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
 
 def run_training_pipeline():
     DATA_FOLDER = "data"
     OUTPUT_FOLDER = "output"
 
     print("Running process_audio_1...")
-    # process_data_1(DATA_FOLDER, OUTPUT_FOLDER)
+    process_data_1(DATA_FOLDER, OUTPUT_FOLDER)
 
     print("Running process_audio_2...")
-    # process_data_2(OUTPUT_FOLDER, OUTPUT_FOLDER)
+    process_data_2(OUTPUT_FOLDER, OUTPUT_FOLDER)
 
     print("Running process_audio_3...")
-    # process_data_3(OUTPUT_FOLDER, OUTPUT_FOLDER)
+    process_data_3(OUTPUT_FOLDER, OUTPUT_FOLDER)
 
     print("Starting model training...")
     train_model_1()

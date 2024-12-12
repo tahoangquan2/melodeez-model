@@ -1,6 +1,5 @@
 from __future__ import print_function
 import os
-import torch
 import glob
 
 def generate_lists(root_dir='output/output3', train_ratio=0.8, output_dir='checkpoints'):
@@ -47,17 +46,19 @@ def generate_lists(root_dir='output/output3', train_ratio=0.8, output_dir='check
 class Config:
     def __init__(self):
         # Training settings
-        self.train_batch_size = 32
+        self.train_batch_size = 64 # 32
         self.num_workers = 4
-        self.max_epoch = 1000
-        self.lr = 3e-4
-        self.weight_decay = 0.0005
+        self.max_epoch = 100
+        self.lr = 1e-4 # 3e-4
+        self.weight_decay = 0.01 # 0.0005
         self.print_freq = 100
 
         # Model settings
         self.backbone = 'resnet18'
         self.input_shape = (1, 80, 630)
-        self.num_classes = 12
+        self.num_classes = 20 # Unique songs
+        self.max_patience = 10 # 5
+        self.val_freq = 3 # 5
 
         # Data settings
         self.train_root = 'output/output3'
@@ -67,7 +68,7 @@ class Config:
         # Save settings
         self.checkpoints_path = 'checkpoints'
 
-        # Visualization settings
+        # DO NOT CHANGE I DONT KNOW WHY BUT DONT - Visualization settings
         self.display = False
 
 def main():
