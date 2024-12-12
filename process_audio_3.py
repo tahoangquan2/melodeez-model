@@ -47,7 +47,6 @@ def process_data(data_folder, output_folder):
     output_dir = os.path.join(output_folder, "output3")
     os.makedirs(output_dir, exist_ok=True)
 
-    # First, process all files
     for sub in ["hum", "song"]:
         print(f"Processing {sub} files...")
         input_path = os.path.join(input_dir, sub)
@@ -66,12 +65,10 @@ def process_data(data_folder, output_folder):
 
         joblib.Parallel(n_jobs=4, verbose=1)(jobs)
 
-    # Handle metadata and split
     if os.path.exists(os.path.join(input_dir, "metadata.csv")):
         input_metadata = os.path.join(input_dir, "metadata.csv")
         output_metadata = os.path.join(output_dir, "metadata.csv")
 
-        # Read and process metadata
         all_ids = set()
         rows = []
         with open(input_metadata, 'r') as f:
@@ -80,10 +77,8 @@ def process_data(data_folder, output_folder):
                 all_ids.add(row['id'])
                 rows.append(row)
 
-        # Randomly select test IDs
         test_ids = set(random.sample(list(all_ids), k=int(len(all_ids) * test_ratio)))
 
-        # Write new metadata with test/train split
         with open(output_metadata, 'w', newline='') as f:
             fieldnames = ["id", "hum", "song", "info", "testing"]
             writer = csv.DictWriter(f, fieldnames=fieldnames)

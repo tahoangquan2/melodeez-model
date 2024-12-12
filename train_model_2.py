@@ -49,8 +49,8 @@ class Config:
         # Training settings
         self.train_batch_size = 32
         self.num_workers = 4
-        self.max_epoch = 100
-        self.lr = 1e-4
+        self.max_epoch = 1000
+        self.lr = 3e-4
         self.weight_decay = 0.0005
         self.print_freq = 100
 

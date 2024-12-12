@@ -5,126 +5,179 @@ import os
 import random
 from tqdm import tqdm
 import csv
+import numpy as np
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
+USE_GPU = torch.cuda.is_available()
+device = torch.device("cuda" if USE_GPU else "cpu")
 
-def pitch_shift(audio, sr, shift_steps):
-    return torchaudio.functional.pitch_shift(audio.cpu(), sr, shift_steps).to(device)
+class AudioAugmenter:
+    def __init__(self, num_tries=5, batch_size=4):
+        self.num_tries = num_tries
+        self.batch_size = batch_size
 
-def add_noise(audio, scale):
-    noise = torch.randn_like(audio, device=audio.device)
-    return audio + noise * scale
+    def pregenerate_augmentation_params(self, num_files):
+        total_augs = num_files * self.num_tries
 
-def apply_gain(audio, gain_factor):
-    return audio * gain_factor
+        params = {
+            'pitch_shift': np.random.uniform(-2, 2, total_augs),
+            'noise_scale': np.random.uniform(0.01, 0.05, total_augs),
+            'gain_db': np.random.uniform(-3, 3, total_augs)
+        }
 
-def get_augmentation_params():
-    effects = []
+        params['gain_factor'] = 10 ** (params['gain_db'] / 20.0)
 
-    shift_steps = random.uniform(-2, 2)
-    effects.append(('pitch_shift', shift_steps))
+        # Randomly choose which effect to use for each augmentation
+        effects = ['pitch_shift', 'add_noise', 'gain']
+        params['chosen_effects'] = np.random.choice(effects, total_augs)
 
-    scale = random.uniform(0.01, 0.05)
-    effects.append(('add_noise', scale))
+        return params
 
-    gain_db = random.uniform(-3, 3)
-    gain_factor = 10 ** (gain_db / 20.0)
-    effects.append(('gain', gain_factor))
+    @torch.no_grad()
+    def augment_batch(self, audio_batch, sr_batch, aug_params, batch_idx):
+        """Apply augmentations to a batch of audio files"""
+        idx = batch_idx * len(audio_batch)
+        effect = aug_params['chosen_effects'][idx]
 
-    chosen_effect = random.choice(effects)
-    return chosen_effect
+        if effect == 'pitch_shift':
+            shift = aug_params['pitch_shift'][idx]
+            if USE_GPU:
+                return torchaudio.functional.pitch_shift(audio_batch.cpu(), sr_batch, shift).to(device)
+            return torchaudio.functional.pitch_shift(audio_batch, sr_batch, shift)
 
-def aug_combination(audio, sr, path, aug_params):
-    processed = audio
-    effect_type, param = aug_params
+        elif effect == 'add_noise':
+            scale = aug_params['noise_scale'][idx]
+            noise = torch.randn_like(audio_batch)
+            return audio_batch + noise * scale
 
-    if effect_type == 'pitch_shift':
-        processed = pitch_shift(processed, sr, param)
-    elif effect_type == 'add_noise':
-        processed = add_noise(processed, param)
-    elif effect_type == 'gain':
-        processed = apply_gain(processed, param)
+        else:
+            gain = aug_params['gain_factor'][idx]
+            return audio_batch * gain
 
-    torchaudio.save(path, processed.cpu(), sr, format='mp3')
-
-def check_existing_augmentations(base_name, aug_path, tries):
-    existing_augs = []
-    for i in range(tries):
-        aug_filename = f"{base_name}_aug{i}.mp3"
-        if os.path.exists(os.path.join(aug_path, aug_filename)):
-            existing_augs.append(aug_filename)
-    return existing_augs
-
-def process_data(data_folder, output_folder, tries=5):
+def process_data(data_folder, output_folder, tries=5, batch_size=4):
     input_folder = os.path.join(data_folder, "output1")
     output_folder = os.path.join(output_folder, "output2")
     os.makedirs(output_folder, exist_ok=True)
 
     metadata_path = os.path.join(input_folder, "metadata.csv")
-    output_metadata = []
-
     hum_out = os.path.join(output_folder, "hum")
     song_out = os.path.join(output_folder, "song")
     os.makedirs(hum_out, exist_ok=True)
     os.makedirs(song_out, exist_ok=True)
 
+    augmenter = AudioAugmenter(tries, batch_size)
+
     with open(metadata_path, newline='') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in tqdm(reader, desc="Processing Files"):
-            try:
-                hum_input = os.path.join(input_folder, "hum", row['hum'])
-                song_input = os.path.join(input_folder, "song", row['song'])
+        total_files = sum(1 for _ in csv.DictReader(csvfile))
 
-                hum_base_name = os.path.splitext(row['hum'])[0]
-                song_base_name = os.path.splitext(row['song'])[0]
+    # Pre-generate all augmentation parameters
+    aug_params = augmenter.pregenerate_augmentation_params(total_files)
 
-                hum_audio, hum_sr = torchaudio.load(hum_input)
-                song_audio, song_sr = torchaudio.load(song_input)
-                hum_audio = hum_audio.to(device)
-                song_audio = song_audio.to(device)
+    output_metadata = []
+    current_batch = {'hum': [], 'song': [], 'metadata': []}
 
-                hum_original = f"{hum_base_name}.mp3"
-                song_original = f"{song_base_name}.mp3"
-                hum_original_path = os.path.join(hum_out, hum_original)
-                song_original_path = os.path.join(song_out, song_original)
+    with torch.no_grad():
+        with open(metadata_path, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
 
-                if not os.path.exists(hum_original_path):
-                    torchaudio.save(hum_original_path, hum_audio.cpu(), hum_sr, format='mp3')
-                if not os.path.exists(song_original_path):
-                    torchaudio.save(song_original_path, song_audio.cpu(), song_sr, format='mp3')
+            for row_idx, row in enumerate(tqdm(reader, total=total_files, desc="Processing files")):
+                hum_path = os.path.join(input_folder, "hum", row['hum'])
+                song_path = os.path.join(input_folder, "song", row['song'])
 
-                processed_files = []
-                processed_files.append((hum_original, song_original))
+                hum_audio, hum_sr = torchaudio.load(hum_path)
+                song_audio, song_sr = torchaudio.load(song_path)
 
-                for i in range(tries):
-                    hum_aug = f"{hum_base_name}_aug{i}.mp3"
-                    song_aug = f"{song_base_name}_aug{i}.mp3"
-                    hum_aug_path = os.path.join(hum_out, hum_aug)
-                    song_aug_path = os.path.join(song_out, song_aug)
+                if USE_GPU:
+                    hum_audio = hum_audio.to(device)
+                    song_audio = song_audio.to(device)
 
-                    if not os.path.exists(hum_aug_path) or not os.path.exists(song_aug_path):
-                        aug_params = get_augmentation_params()
-                        aug_combination(hum_audio, hum_sr, hum_aug_path, aug_params)
-                        aug_combination(song_audio, song_sr, song_aug_path, aug_params)
-                        print(f"Generated augmentation {i} for {row['id']}")
-                    else:
-                        print(f"Skipping existing augmentation {i} for {row['id']}")
+                current_batch['hum'].append(hum_audio)
+                current_batch['song'].append(song_audio)
+                current_batch['metadata'].append({
+                    'id': row['id'],
+                    'hum_base': os.path.splitext(row['hum'])[0],
+                    'song_base': os.path.splitext(row['song'])[0],
+                    'info': row['info'],
+                    'sr': (hum_sr, song_sr)
+                })
 
-                    processed_files.append((hum_aug, song_aug))
+                if len(current_batch['hum']) == batch_size or row_idx == total_files - 1:
+                    # Process original files
+                    for idx, meta in enumerate(current_batch['metadata']):
+                        hum_original = f"{meta['hum_base']}.mp3"
+                        song_original = f"{meta['song_base']}.mp3"
 
-                # Add to metadata
-                for hum_file, song_file in processed_files:
-                    output_metadata.append([row['id'], hum_file, song_file, row['info']])
+                        if not os.path.exists(os.path.join(hum_out, hum_original)):
+                            torchaudio.save(
+                                os.path.join(hum_out, hum_original),
+                                current_batch['hum'][idx].cpu(),
+                                meta['sr'][0],
+                                format='mp3'
+                            )
 
-            except Exception as e:
-                print(f"Error processing {row['id']}: {e}")
-                continue
+                        if not os.path.exists(os.path.join(song_out, song_original)):
+                            torchaudio.save(
+                                os.path.join(song_out, song_original),
+                                current_batch['song'][idx].cpu(),
+                                meta['sr'][1],
+                                format='mp3'
+                            )
 
+                        output_metadata.append((meta['id'], hum_original, song_original, meta['info']))
+
+                    # Process augmentations
+                    for aug_idx in range(tries):
+                        for idx, meta in enumerate(current_batch['metadata']):
+                            hum_aug = f"{meta['hum_base']}_aug{aug_idx}.mp3"
+                            song_aug = f"{meta['song_base']}_aug{aug_idx}.mp3"
+
+                            if os.path.exists(os.path.join(hum_out, hum_aug)) and \
+                               os.path.exists(os.path.join(song_out, song_aug)):
+                                output_metadata.append((meta['id'], hum_aug, song_aug, meta['info']))
+                                continue
+
+                            aug_hum = augmenter.augment_batch(
+                                current_batch['hum'][idx],
+                                meta['sr'][0],
+                                aug_params,
+                                row_idx * tries + aug_idx
+                            )
+
+                            aug_song = augmenter.augment_batch(
+                                current_batch['song'][idx],
+                                meta['sr'][1],
+                                aug_params,
+                                row_idx * tries + aug_idx
+                            )
+
+                            torchaudio.save(
+                                os.path.join(hum_out, hum_aug),
+                                aug_hum.cpu(),
+                                meta['sr'][0],
+                                format='mp3'
+                            )
+
+                            torchaudio.save(
+                                os.path.join(song_out, song_aug),
+                                aug_song.cpu(),
+                                meta['sr'][1],
+                                format='mp3'
+                            )
+
+                            output_metadata.append((meta['id'], hum_aug, song_aug, meta['info']))
+
+                    if USE_GPU:
+                        torch.cuda.empty_cache()
+                    current_batch = {'hum': [], 'song': [], 'metadata': []}
+
+                    if len(output_metadata) % (batch_size * 10) == 0:
+                        save_metadata(output_metadata, output_folder)
+
+    save_metadata(output_metadata, output_folder)
+    print("Processing complete.")
+
+def save_metadata(output_metadata, output_folder):
     output_metadata_path = os.path.join(output_folder, "metadata.csv")
     with open(output_metadata_path, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["id", "hum", "song", "info"])
         writer.writerows(output_metadata)
-
-    print("Processing complete.")
