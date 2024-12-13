@@ -7,6 +7,17 @@ from torch.utils.data import Dataset
 import faiss
 import torchvision.models as models
 
+class FocalLoss(nn.Module):
+    def __init__(self, gamma=2):
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+
+    def forward(self, input, target):
+        ce_loss = F.cross_entropy(input, target, reduction='none')
+        pt = torch.exp(-ce_loss)
+        focal_loss = ((1 - pt) ** self.gamma * ce_loss).mean()
+        return focal_loss
+
 class Visualizer:
     def __init__(self, env='default', **kwargs):
         try:
@@ -89,29 +100,74 @@ class AudioDataset(Dataset):
             raise ValueError("input_shape must be a tuple of (channels, height, width)")
 
         with open(list_file, 'r') as f:
-            self.samples = [(os.path.join(root_dir, line.split()[0]),
-                           int(line.split()[1])) for line in f.readlines()]
+            lines = f.readlines()
+            self.samples = []
+            for line in lines:
+                try:
+                    parts = line.rstrip('\n').rsplit(' ', 1)
+                    if len(parts) != 2:
+                        print(f"Warning: Malformed line: {line}")
+                        continue
+
+                    path, label_str = parts
+                    path = path.replace('\\', '/')
+                    label = int(label_str)
+
+                    full_path = os.path.join(root_dir, path)
+                    if not os.path.exists(full_path):
+                        print(f"Warning: File not found: {full_path}")
+                        continue
+
+                    self.samples.append((full_path, label))
+                except Exception as e:
+                    print(f"Warning: Error processing line: {line}, Error: {e}")
+
+        if not self.samples:
+            raise RuntimeError("No valid samples found in the dataset")
+
+        print(f"Loaded {len(self.samples)} valid samples")
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        npy_path, label = self.samples[idx]
-        data = np.load(npy_path)
-        label = label - 1
-        if data.shape[1] >= self.input_shape[1]:
-            data = data[:, :self.input_shape[1]]
-        else:
-            result = np.zeros(self.input_shape, dtype=np.float32)
-            result[:, :data.shape[1]] = data
-            data = result
-        return torch.from_numpy(data).float().unsqueeze(0), label
+        try:
+            npy_path, label = self.samples[idx]
+            data = np.load(npy_path)
+
+            if len(data.shape) != 2:
+                raise ValueError(f"Expected 2D array, got shape {data.shape}")
+
+            if data.shape[1] >= self.input_shape[1]:
+                data = data[:, :self.input_shape[1]]
+            else:
+                result = np.zeros(self.input_shape, dtype=np.float32)
+                result[:, :data.shape[1]] = data
+                data = result
+
+            if label <= 0:
+                raise ValueError(f"Invalid label value: {label}")
+
+            label = label - 1
+
+            if np.isnan(data).any() or np.isinf(data).any():
+                raise ValueError("Data contains NaN or Inf values")
+
+            return torch.from_numpy(data).float().unsqueeze(0), label
+
+        except Exception as e:
+            print(f"Error loading sample {idx} from {npy_path}: {e}")
+            return torch.zeros((1,) + self.input_shape), 0
 
 def read_val(path_val, data_root):
     dict_data = []
     with open(path_val, 'r') as files:
-        for line in files.read().splitlines():
-            filepath, label = line.split(' ')
+        for line in files:
+            parts = line.rstrip('\n').rsplit(' ', 1)
+            if len(parts) != 2:
+                print(f"Warning: Malformed validation line: {line}")
+                continue
+            filepath, label = parts
             typ = 'song' if 'song' in filepath else 'hum'
             dict_data.append({
                 'path': os.path.join(data_root, filepath),
