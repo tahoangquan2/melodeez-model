@@ -47,11 +47,11 @@ def run_search_pipeline():
     OUTPUT_FOLDER = "search"
     MODEL_PATH = "checkpoints/resnet18_best.pth"
 
-    print("Processing input audio files...")
-    search_1(INPUT_FOLDER, OUTPUT_FOLDER)
+    # print("Processing input audio files...")
+    # search_1(INPUT_FOLDER, OUTPUT_FOLDER)
 
-    print("Creating embeddings...")
-    search_2(INPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
+    # print("Creating embeddings...")
+    # search_2(INPUT_FOLDER, OUTPUT_FOLDER, MODEL_PATH)
 
     print("Performing similarity search...")
     search_3(INPUT_FOLDER, OUTPUT_FOLDER)
