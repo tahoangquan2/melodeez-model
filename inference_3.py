@@ -9,7 +9,7 @@ from train_model_2 import Config
 class FAISSIndexBuilder:
     def __init__(self):
         self.config = Config()
-        self.embedding_dim = self.config.num_classes
+        self.embedding_dim = self.config.embedding_dim
         self.embeddings = []
         self.metadata = {}
         self.failed_embeddings = []
@@ -61,6 +61,7 @@ def create_faiss_index(output_folder):
 
     try:
         index_builder = FAISSIndexBuilder()
+        print(f"Initialized index builder with embedding dimension: {index_builder.embedding_dim}")
 
         metadata_path = os.path.join(input_folder, "metadata.csv")
         if not os.path.exists(metadata_path):
@@ -71,6 +72,7 @@ def create_faiss_index(output_folder):
             reader = csv.DictReader(f)
             rows = list(reader)
             batch_size = index_builder.config.train_batch_size
+            print(f"Using batch size: {batch_size}")
 
             for i in tqdm(range(0, len(rows), batch_size)):
                 batch_rows = rows[i:i + batch_size]
