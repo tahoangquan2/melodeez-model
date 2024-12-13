@@ -1,64 +1,57 @@
 from __future__ import print_function
 import os
-import glob
+import pandas as pd
 
-def generate_lists(root_dir='output/output3', train_ratio=0.8, output_dir='checkpoints'):
+def generate_lists(root_dir='output/output3', output_dir='checkpoints'):
     os.makedirs(output_dir, exist_ok=True)
+    metadata_file = os.path.join(root_dir, 'metadata.csv')
+    df = pd.read_csv(metadata_file)
 
-    hum_files = glob.glob(os.path.join(root_dir, 'hum', '*.npy'))
-    song_files = glob.glob(os.path.join(root_dir, 'song', '*.npy'))
-
-    hum_ids = sorted(list(set([int(os.path.basename(f).split('.')[0].split('_')[0]) for f in hum_files])))
-
-    num_train = int(len(hum_ids) * train_ratio)
-    train_ids = set(hum_ids[:num_train])
-    val_ids = set(hum_ids[num_train:])
+    train_data = df[df['testing'] == 'train']
+    val_data = df[df['testing'] == 'test']
 
     train_lines = []
     val_lines = []
 
-    for f in hum_files:
-        filename = os.path.basename(f)
-        file_id = int(filename.split('.')[0].split('_')[0])
-        rel_path = os.path.join('hum', filename)
-        line = f"{rel_path} {file_id}"
-        if file_id in train_ids:
-            train_lines.append(line)
-        else:
-            val_lines.append(line)
+    for _, row in train_data.iterrows():
+        hum_path = os.path.join('hum', row['hum'])
+        train_lines.append(f"{hum_path} {row['id']}")
 
-    for f in song_files:
-        filename = os.path.basename(f)
-        file_id = int(filename.split('.')[0].split('_')[0])
-        rel_path = os.path.join('song', filename)
-        line = f"{rel_path} {file_id}"
-        if file_id in train_ids:
-            train_lines.append(line)
-        else:
-            val_lines.append(line)
+        song_path = os.path.join('song', row['song'])
+        train_lines.append(f"{song_path} {row['id']}")
 
-    with open(os.path.join(output_dir, 'train_list.txt'), 'w') as f:
+    for _, row in val_data.iterrows():
+        hum_path = os.path.join('hum', row['hum'])
+        val_lines.append(f"{hum_path} {row['id']}")
+
+        song_path = os.path.join('song', row['song'])
+        val_lines.append(f"{song_path} {row['id']}")
+
+    train_lines = list(dict.fromkeys(train_lines))
+    val_lines = list(dict.fromkeys(val_lines))
+
+    with open(os.path.join(output_dir, 'train_list.txt'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(train_lines))
-
-    with open(os.path.join(output_dir, 'val_list.txt'), 'w') as f:
+    with open(os.path.join(output_dir, 'val_list.txt'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(val_lines))
+
+    print(f"Created train list with {len(train_lines)} entries")
+    print(f"Created validation list with {len(val_lines)} entries")
 
 class Config:
     def __init__(self):
         # Training settings
-        self.train_batch_size = 64 # 32
+        self.train_batch_size = 32
         self.num_workers = 4
         self.max_epoch = 100
-        self.lr = 1e-4 # 3e-4
-        self.weight_decay = 0.01 # 0.0005
+        self.lr = 1e-2
+        self.weight_decay = 1e-1
         self.print_freq = 100
 
         # Model settings
         self.backbone = 'resnet18'
         self.input_shape = (1, 80, 630)
-        self.num_classes = 20 # Unique songs
-        self.max_patience = 10 # 5
-        self.val_freq = 3 # 5
+        self.embedding_dim = 512
 
         # Data settings
         self.train_root = 'output/output3'
@@ -76,11 +69,9 @@ def main():
     os.makedirs(opt.checkpoints_path, exist_ok=True)
 
     if not os.path.exists(opt.train_list) or not os.path.exists(opt.val_list):
-        print("Generating train and validation lists...")
+        print("Generating train and validation lists from metadata.csv...")
         generate_lists(opt.train_root)
 
+    print("Starting model training...")
     from train_model_1 import train_model_1
     train_model_1(opt)
-
-if __name__ == '__main__':
-    main()
