@@ -4,6 +4,7 @@ import pandas as pd
 
 def generate_lists(root_dir='output/output3', output_dir='checkpoints'):
     os.makedirs(output_dir, exist_ok=True)
+
     metadata_file = os.path.join(root_dir, 'metadata.csv')
     df = pd.read_csv(metadata_file)
 
@@ -14,17 +15,17 @@ def generate_lists(root_dir='output/output3', output_dir='checkpoints'):
     val_lines = []
 
     for _, row in train_data.iterrows():
-        hum_path = os.path.join('hum', row['hum'])
+        hum_path = os.path.join('hum', row['hum']).replace('\\', '/')
         train_lines.append(f"{hum_path} {row['id']}")
 
-        song_path = os.path.join('song', row['song'])
+        song_path = os.path.join('song', row['song']).replace('\\', '/')
         train_lines.append(f"{song_path} {row['id']}")
 
     for _, row in val_data.iterrows():
-        hum_path = os.path.join('hum', row['hum'])
+        hum_path = os.path.join('hum', row['hum']).replace('\\', '/')
         val_lines.append(f"{hum_path} {row['id']}")
 
-        song_path = os.path.join('song', row['song'])
+        song_path = os.path.join('song', row['song']).replace('\\', '/')
         val_lines.append(f"{song_path} {row['id']}")
 
     train_lines = list(dict.fromkeys(train_lines))
@@ -32,6 +33,7 @@ def generate_lists(root_dir='output/output3', output_dir='checkpoints'):
 
     with open(os.path.join(output_dir, 'train_list.txt'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(train_lines))
+
     with open(os.path.join(output_dir, 'val_list.txt'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(val_lines))
 

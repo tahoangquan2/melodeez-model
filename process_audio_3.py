@@ -27,11 +27,15 @@ def process_audio(audio, sr=22050, n_mels=80, n_fft=1024, hop_length=256, win_le
 
     return mel.numpy()
 
+def normalize_filename(filename):
+    return filename.encode('ascii', 'ignore').decode().replace('\'', "'").replace('"', "'")
+
 def process_file(audio_path, out_path, sr=22050):
     try:
         audio, _ = librosa.load(audio_path, sr=sr)
         spec = process_audio(audio, sr=sr)
-        np.save(out_path, spec)
+        normalized_out_path = normalize_filename(out_path)
+        np.save(normalized_out_path, spec)
         return True
     except Exception as e:
         print(f"Error processing {audio_path}: {e}")
@@ -73,13 +77,13 @@ def process_data(data_folder, output_folder):
             reader = csv.DictReader(f)
             for row in reader:
                 all_ids.add(row['id'])
-                row['hum'] = row['hum'].replace('.mp3', '.npy')
-                row['song'] = row['song'].replace('.mp3', '.npy')
+                row['hum'] = normalize_filename(row['hum'].replace('.mp3', '.npy'))
+                row['song'] = normalize_filename(row['song'].replace('.mp3', '.npy'))
                 rows.append(row)
 
         test_ids = set(random.sample(list(all_ids), k=int(len(all_ids) * test_ratio)))
 
-        with open(output_metadata, 'w', newline='') as f:
+        with open(output_metadata, 'w', newline='', encoding='utf-8') as f:
             fieldnames = ["id", "hum", "song", "info", "testing"]
             writer = csv.DictWriter(f, fieldnames=fieldnames)
             writer.writeheader()
