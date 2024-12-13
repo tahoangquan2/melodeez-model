@@ -73,6 +73,8 @@ def process_data(data_folder, output_folder):
             reader = csv.DictReader(f)
             for row in reader:
                 all_ids.add(row['id'])
+                row['hum'] = row['hum'].replace('.mp3', '.npy')
+                row['song'] = row['song'].replace('.mp3', '.npy')
                 rows.append(row)
 
         test_ids = set(random.sample(list(all_ids), k=int(len(all_ids) * test_ratio)))
