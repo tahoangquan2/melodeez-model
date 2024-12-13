@@ -43,7 +43,7 @@ def generate_lists(root_dir='output/output3', output_dir='checkpoints'):
 class Config:
     def __init__(self):
         # Training settings
-        self.train_batch_size = 32
+        self.train_batch_size = 64
         self.num_workers = 4
         self.max_epoch = 100
         self.lr = 1e-2
