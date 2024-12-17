@@ -11,8 +11,11 @@ def process_inference_step1(data_folder, output_folder, target_db=-20.0, num_wor
     output_metadata = []
     processing_args = []
 
-    with open(metadata_path, newline='') as csvfile:
-        reader = csv.DictReader(csvfile)
+    fieldnames = ['id', 'song', 'info']
+
+    with open(metadata_path, newline='', encoding='utf-8') as csvfile:
+        reader = csv.DictReader(csvfile, fieldnames=fieldnames)
+        next(reader)
         for row in reader:
             song_file = os.path.splitext(row['song'])[0] + ".mp3"
             song_input = os.path.join(data_folder, "song", row['song'])
