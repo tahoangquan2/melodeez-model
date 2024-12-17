@@ -82,7 +82,7 @@ This training process will create the models to `checkpoints/`.
 
 ---
 
-### **Step 2: Inference**
+### **Step 3: Inference**
 
 Run:
 
@@ -94,7 +94,7 @@ This processes audio data, generates embeddings, and builds the FAISS index savi
 
 ---
 
-### **Step 3: Search**
+### **Step 4: Search**
 
 Run:
 
