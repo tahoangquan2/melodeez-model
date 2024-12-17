@@ -16,23 +16,47 @@ def add_noise(audio, scale):
 def apply_gain(audio, gain_factor):
     return audio * gain_factor
 
-def apply_single_effect(audio, sr, effect_type, path):
+def change_tempo(audio, sr, bpm_change):
+    tempo_ratio = 1.0 + (bpm_change / 100.0)
+    return librosa.effects.time_stretch(audio, rate=tempo_ratio)
+
+def apply_effect(audio, sr, effect_type):
     if effect_type == 'pitch_shift':
         shift_steps = random.uniform(-3, 3)
-        processed = pitch_shift(audio, sr, shift_steps)
+        return pitch_shift(audio, sr, shift_steps)
     elif effect_type == 'noise':
         snr = random.uniform(15, 30)
         signal_power = np.mean(audio ** 2)
         noise_power = signal_power / (10 ** (snr / 10))
         scale = np.sqrt(noise_power)
-        processed = add_noise(audio, scale)
+        return add_noise(audio, scale)
     elif effect_type == 'gain':
         gain_db = random.uniform(-4, 4)
         gain_factor = 10 ** (gain_db / 20.0)
-        processed = apply_gain(audio, gain_factor)
+        return apply_gain(audio, gain_factor)
+    elif effect_type == 'tempo':
+        bpm_change = random.uniform(-10, 10)
+        return change_tempo(audio, sr, bpm_change)
+    return audio
 
-    processed = np.clip(processed, -1, 1)
-    sf.write(path, processed, sr, format='mp3')
+def apply_effects(audio, sr, effects_list):
+    processed = audio.copy()
+    for effect in effects_list:
+        processed = apply_effect(processed, sr, effect)
+    return processed
+
+def generate_effect_combination():
+    effects = ['pitch_shift', 'noise', 'gain', 'tempo']
+    use_two_effects = random.random() < 0.5
+
+    if use_two_effects:
+        selected_effects = random.sample(effects, 2)
+        effects_str = "+".join(selected_effects)
+    else:
+        selected_effects = [random.choice(effects)]
+        effects_str = selected_effects[0]
+
+    return selected_effects, effects_str
 
 def check_existing_augmentations(base_name, aug_path, tries):
     existing_augs = []
@@ -55,60 +79,71 @@ def process_data(data_folder, output_folder, tries=5):
     os.makedirs(hum_out, exist_ok=True)
     os.makedirs(song_out, exist_ok=True)
 
-    effects = ['pitch_shift', 'noise', 'gain']
-
     with open(metadata_path, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in tqdm(reader, desc="Processing Files"):
-            subs = ["hum", "song"]
-            processed_files = {sub: [] for sub in subs}
+            processed_hums = []
+            processed_songs = []
 
-            for sub in subs:
-                input_file = row[sub]
-                input_path = os.path.join(input_folder, sub, input_file)
-                base_name = os.path.splitext(input_file)[0]
-                aug_path = os.path.join(output_folder, sub)
+            song_input = os.path.join(input_folder, "song", row['song'])
+            song_base_name = os.path.splitext(row['song'])[0]
+            song_output = os.path.join(song_out, f"{song_base_name}.mp3")
 
-                try:
-                    existing_augs = check_existing_augmentations(base_name, aug_path, tries)
-                    original_file = f"{base_name}.mp3"
-                    original_path = os.path.join(aug_path, original_file)
+            try:
+                if not os.path.exists(song_output):
+                    audio, sr = librosa.load(song_input, sr=None)
+                    sf.write(song_output, audio, sr, format='mp3')
+                    print(f"Saved song: {song_base_name}.mp3")
+                processed_songs.append(f"{song_base_name}.mp3")
+            except Exception as e:
+                print(f"Error processing song {song_input}: {e}")
+                continue
 
-                    if len(existing_augs) == tries and os.path.exists(original_path):
-                        processed_files[sub].extend([original_file] + existing_augs)
-                        print(f"Skipping {base_name} - all files exist")
-                        continue
+            # Process hum file with augmentations
+            hum_input = os.path.join(input_folder, "hum", row['hum'])
+            hum_base_name = os.path.splitext(row['hum'])[0]
 
-                    audio, sr = librosa.load(input_path, sr=None)
+            try:
+                existing_augs = check_existing_augmentations(hum_base_name, hum_out, tries)
+                original_hum = f"{hum_base_name}.mp3"
+                original_hum_path = os.path.join(hum_out, original_hum)
 
-                    if not os.path.exists(original_path):
-                        sf.write(original_path, audio, sr, format='mp3')
-                        print(f"Saved original: {original_file}")
-                    processed_files[sub].append(original_file)
-
-                    augmentation_effects = effects * 2
-                    random.shuffle(augmentation_effects)
-
-                    for i in range(tries):
-                        aug_filename = f"{base_name}_aug{i}.mp3"
-                        aug_output = os.path.join(aug_path, aug_filename)
-
-                        if not os.path.exists(aug_output):
-                            effect = augmentation_effects[i]
-                            apply_single_effect(audio, sr, effect, aug_output)
-                            print(f"Generated {effect} augmentation: {aug_filename}")
-                        else:
-                            print(f"Skipping existing: {aug_filename}")
-
-                        processed_files[sub].append(aug_filename)
-
-                except Exception as e:
-                    print(f"Error processing {input_path}: {e}")
+                if len(existing_augs) == tries and os.path.exists(original_hum_path):
+                    processed_hums.extend([original_hum] + existing_augs)
+                    print(f"Skipping {hum_base_name} - all files exist")
                     continue
 
-            if processed_files["hum"] and processed_files["song"]:
-                for hum_file in processed_files["hum"]:
-                    for song_file in processed_files["song"]:
+                audio, sr = librosa.load(hum_input, sr=None)
+
+                if not os.path.exists(original_hum_path):
+                    sf.write(original_hum_path, audio, sr, format='mp3')
+                    print(f"Saved original hum: {original_hum}")
+                processed_hums.append(original_hum)
+
+                # Generate augmentations
+                for i in range(tries):
+                    aug_filename = f"{hum_base_name}_aug{i}.mp3"
+                    aug_output = os.path.join(hum_out, aug_filename)
+
+                    if not os.path.exists(aug_output):
+                        effects_list, effects_str = generate_effect_combination()
+                        processed = apply_effects(audio, sr, effects_list)
+                        processed = np.clip(processed, -1, 1)
+                        sf.write(aug_output, processed, sr, format='mp3')
+                        print(f"Generated augmentation with effects {effects_str}: {aug_filename}")
+                    else:
+                        print(f"Skipping existing: {aug_filename}")
+
+                    processed_hums.append(aug_filename)
+
+            except Exception as e:
+                print(f"Error processing hum {hum_input}: {e}")
+                continue
+
+            # Create metadata entries
+            if processed_hums and processed_songs:
+                for hum_file in processed_hums:
+                    for song_file in processed_songs:
                         output_metadata.append([row['id'], hum_file, song_file])
 
     output_metadata_path = os.path.join(output_folder, "metadata.csv")
