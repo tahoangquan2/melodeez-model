@@ -35,7 +35,7 @@ Before running the pipeline, verify that the following folders exist:
   data/
     hum/
     song/
-    metadata.csv (id, hum, song, info)
+    metadata.csv (id, hum, song)
   ```
 
 - **For Inferencing:**
@@ -70,6 +70,18 @@ This processes and augments the audio data, saving outputs to `output/output1/`,
 
 ---
 
+### **Step 2: Training**
+
+Run:
+
+```bash
+python main.py train
+```
+
+This training process will create the models to `checkpoints/`.
+
+---
+
 ### **Step 2: Inference**
 
 Run:
@@ -79,8 +91,6 @@ python main.py inference
 ```
 
 This processes audio data, generates embeddings, and builds the FAISS index saving outputs to `output/output4/`, `output/output5/`, `output/output6/`, `output/output7/` and `output/output8/`.
-
-Once you have the output8 folder, delete the other 7 output folders to avoid wasting memory.
 
 ---
 

@@ -25,9 +25,6 @@ def run_training_pipeline():
     print("Running process_audio_3...")
     process_data_3(OUTPUT_FOLDER, OUTPUT_FOLDER)
 
-    print("Starting model training...")
-    train_model()
-
 def run_inference_pipeline():
     INPUT_FOLDER = "song"
     OUTPUT_FOLDER = "output"
@@ -56,6 +53,10 @@ def run_search_pipeline():
     print("Performing similarity search...")
     search_3(INPUT_FOLDER, OUTPUT_FOLDER)
 
+def run_train_model():
+    print("Starting model training...")
+    train_model()
+
 if __name__ == "__main__":
     import sys
 
@@ -66,7 +67,9 @@ if __name__ == "__main__":
             run_search_pipeline()
         elif sys.argv[1] == "preprocess":
             run_training_pipeline()
+        elif sys.argv[1] == "train":
+            run_train_model()
         else:
-            print("Invalid argument. Use 'inference' or 'search' or 'preprocess'")
+            print("Invalid argument. Use 'inference' or 'search' or 'preprocess' or 'train'")
     else:
-        print("No argument provided. Use 'inference' or 'search' or 'preprocess'")
+        print("No argument provided. Use 'inference' or 'search' or 'preprocess' or 'train'")
