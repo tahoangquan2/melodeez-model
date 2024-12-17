@@ -7,6 +7,17 @@ from concurrent.futures import ProcessPoolExecutor
 from tqdm import tqdm
 import subprocess
 
+def get_center(audio_data, sr):
+    total_duration = len(audio_data) / sr
+    if total_duration > 45:
+        # Calculate start and end samples for middle 45 seconds
+        middle_point = len(audio_data) // 2
+        samples_per_45_sec = 45 * sr
+        start_sample = middle_point - (samples_per_45_sec // 2)
+        end_sample = start_sample + samples_per_45_sec
+        return audio_data[start_sample:end_sample]
+    return audio_data
+
 def load_audio(file_path):
     try:
         audio_data, sr = sf.read(file_path)
@@ -96,6 +107,9 @@ def process_file(args):
 
         audio_data, sr = load_audio(input_path)
 
+        if "/hum/" in input_path or "\\hum\\" in input_path:
+            audio_data = get_center(audio_data, sr)
+
         audio_data = adjust_volume(audio_data, target_db)
         audio_data = trim_silence(audio_data, sr)
 
@@ -111,7 +125,7 @@ def process_file(args):
         print(f"Error processing {input_path}: {str(e)}")
         return False
 
-def process_data(data_folder, output_folder, target_db=-20.0, num_workers=4):
+def process_data(data_folder, output_folder, target_db=-20.0, num_workers=8):
     output_folder = os.path.join(output_folder, "output1")
     os.makedirs(output_folder, exist_ok=True)
     metadata_path = os.path.join(data_folder, "metadata.csv")
@@ -146,15 +160,14 @@ def process_data(data_folder, output_folder, target_db=-20.0, num_workers=4):
             if hum_future.result() and song_future.result():
                 output_metadata.append([row['id'],
                                      os.path.basename(hum_args[1]),
-                                     os.path.basename(song_args[1]),
-                                     row['info']])
+                                     os.path.basename(song_args[1])])
             else:
                 print(f"Skipping {row['id']} due to processing failure.")
 
     output_metadata_file = os.path.join(output_folder, "metadata.csv")
     with open(output_metadata_file, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(["id", "hum", "song", "info"])
+        writer.writerow(["id", "hum", "song"])
         writer.writerows(output_metadata)
 
     print("Processing complete.")

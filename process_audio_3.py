@@ -83,13 +83,18 @@ def process_data(data_folder, output_folder):
 
         test_ids = set(random.sample(list(all_ids), k=int(len(all_ids) * test_ratio)))
 
-        with open(output_metadata, 'w', newline='', encoding='utf-8') as f:
-            fieldnames = ["id", "hum", "song", "info", "testing"]
-            writer = csv.DictWriter(f, fieldnames=fieldnames)
-            writer.writeheader()
+    with open(output_metadata, 'w', newline='', encoding='utf-8') as f:
+        fieldnames = ["id", "hum", "song", "testing"]
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
 
-            for row in rows:
-                row["testing"] = "test" if row["id"] in test_ids else "train"
-                writer.writerow(row)
+        for row in rows:
+            row["testing"] = "test" if row["id"] in test_ids else "train"
+            writer.writerow({
+                "id": row["id"],
+                "hum": row["hum"],
+                "song": row["song"],
+                "testing": row["testing"]
+            })
 
     print("Processing complete.")

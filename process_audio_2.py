@@ -109,12 +109,12 @@ def process_data(data_folder, output_folder, tries=5):
             if processed_files["hum"] and processed_files["song"]:
                 for hum_file in processed_files["hum"]:
                     for song_file in processed_files["song"]:
-                        output_metadata.append([row['id'], hum_file, song_file, row['info']])
+                        output_metadata.append([row['id'], hum_file, song_file])
 
     output_metadata_path = os.path.join(output_folder, "metadata.csv")
     with open(output_metadata_path, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(["id", "hum", "song", "info"])
+        writer.writerow(["id", "hum", "song"])
         writer.writerows(output_metadata)
 
     print("Processing complete.")
