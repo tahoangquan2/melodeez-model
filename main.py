@@ -12,7 +12,7 @@ import os
 
 os.environ['KMP_DUPLICATE_LIB_OK']='TRUE'
 
-def run_training_pipeline():
+def run_process_pipeline():
     DATA_FOLDER = "data"
     OUTPUT_FOLDER = "output"
 
@@ -65,11 +65,11 @@ if __name__ == "__main__":
             run_inference_pipeline()
         elif sys.argv[1] == "search":
             run_search_pipeline()
-        elif sys.argv[1] == "preprocess":
-            run_training_pipeline()
+        elif sys.argv[1] == "process":
+            run_process_pipeline()
         elif sys.argv[1] == "train":
             run_train_model()
         else:
-            print("Invalid argument. Use 'inference' or 'search' or 'preprocess' or 'train'")
+            print("Invalid argument. Use 'inference' or 'search' or 'process' or 'train'")
     else:
-        print("No argument provided. Use 'inference' or 'search' or 'preprocess' or 'train'")
+        print("No argument provided. Use 'inference' or 'search' or 'process' or 'train'")

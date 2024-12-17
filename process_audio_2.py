@@ -85,6 +85,7 @@ def process_data(data_folder, output_folder, tries=5):
             processed_hums = []
             processed_songs = []
 
+            # Process song file
             song_input = os.path.join(input_folder, "song", row['song'])
             song_base_name = os.path.splitext(row['song'])[0]
             song_output = os.path.join(song_out, f"{song_base_name}.mp3")
@@ -99,28 +100,22 @@ def process_data(data_folder, output_folder, tries=5):
                 print(f"Error processing song {song_input}: {e}")
                 continue
 
-            # Process hum file with augmentations
+            # Process both versions of hum files
             hum_input = os.path.join(input_folder, "hum", row['hum'])
             hum_base_name = os.path.splitext(row['hum'])[0]
 
+            # Process middle 45s version
             try:
                 existing_augs = check_existing_augmentations(hum_base_name, hum_out, tries)
                 original_hum = f"{hum_base_name}.mp3"
                 original_hum_path = os.path.join(hum_out, original_hum)
 
-                if len(existing_augs) == tries and os.path.exists(original_hum_path):
-                    processed_hums.extend([original_hum] + existing_augs)
-                    print(f"Skipping {hum_base_name} - all files exist")
-                    continue
-
-                audio, sr = librosa.load(hum_input, sr=None)
-
                 if not os.path.exists(original_hum_path):
+                    audio, sr = librosa.load(hum_input, sr=None)
                     sf.write(original_hum_path, audio, sr, format='mp3')
                     print(f"Saved original hum: {original_hum}")
                 processed_hums.append(original_hum)
 
-                # Generate augmentations
                 for i in range(tries):
                     aug_filename = f"{hum_base_name}_aug{i}.mp3"
                     aug_output = os.path.join(hum_out, aug_filename)
@@ -131,10 +126,33 @@ def process_data(data_folder, output_folder, tries=5):
                         processed = np.clip(processed, -1, 1)
                         sf.write(aug_output, processed, sr, format='mp3')
                         print(f"Generated augmentation with effects {effects_str}: {aug_filename}")
-                    else:
-                        print(f"Skipping existing: {aug_filename}")
 
                     processed_hums.append(aug_filename)
+
+                # Process first 60s version
+                hum_input_60s = os.path.join(input_folder, "hum", f"{hum_base_name}__2.mp3")
+                if os.path.exists(hum_input_60s):
+                    original_hum_60s = f"{hum_base_name}__2.mp3"
+                    original_hum_path_60s = os.path.join(hum_out, original_hum_60s)
+
+                    if not os.path.exists(original_hum_path_60s):
+                        audio_60s, sr = librosa.load(hum_input_60s, sr=None)
+                        sf.write(original_hum_path_60s, audio_60s, sr, format='mp3')
+                        print(f"Saved original hum (60s): {original_hum_60s}")
+                    processed_hums.append(original_hum_60s)
+
+                    for i in range(tries):
+                        aug_filename_60s = f"{hum_base_name}__2_aug{i}.mp3"
+                        aug_output_60s = os.path.join(hum_out, aug_filename_60s)
+
+                        if not os.path.exists(aug_output_60s):
+                            effects_list, effects_str = generate_effect_combination()
+                            processed = apply_effects(audio_60s, sr, effects_list)
+                            processed = np.clip(processed, -1, 1)
+                            sf.write(aug_output_60s, processed, sr, format='mp3')
+                            print(f"Generated augmentation with effects {effects_str}: {aug_filename_60s}")
+
+                        processed_hums.append(aug_filename_60s)
 
             except Exception as e:
                 print(f"Error processing hum {hum_input}: {e}")
