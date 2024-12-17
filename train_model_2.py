@@ -6,39 +6,51 @@ def generate_lists(root_dir='output/output3', output_dir='checkpoints'):
     os.makedirs(output_dir, exist_ok=True)
 
     metadata_file = os.path.join(root_dir, 'metadata.csv')
-    df = pd.read_csv(metadata_file)
+    try:
+        df = pd.read_csv(metadata_file)
+        required_columns = ['id', 'hum', 'song', 'testing']
 
-    train_data = df[df['testing'] == 'train']
-    val_data = df[df['testing'] == 'test']
+        if not all(col in df.columns for col in required_columns):
+            raise ValueError(f"Missing required columns. CSV must contain: {required_columns}")
 
-    train_lines = []
-    val_lines = []
+        train_data = df[df['testing'] == 'train']
+        val_data = df[df['testing'] == 'test']
 
-    for _, row in train_data.iterrows():
-        hum_path = os.path.join('hum', row['hum']).replace('\\', '/')
-        train_lines.append(f"{hum_path} {row['id']}")
+        train_lines = []
+        val_lines = []
 
-        song_path = os.path.join('song', row['song']).replace('\\', '/')
-        train_lines.append(f"{song_path} {row['id']}")
+        for _, row in train_data.iterrows():
+            hum_path = os.path.join('hum', row['hum']).replace('\\', '/')
+            train_lines.append(f"{hum_path} {row['id']}")
 
-    for _, row in val_data.iterrows():
-        hum_path = os.path.join('hum', row['hum']).replace('\\', '/')
-        val_lines.append(f"{hum_path} {row['id']}")
+            song_path = os.path.join('song', row['song']).replace('\\', '/')
+            train_lines.append(f"{song_path} {row['id']}")
 
-        song_path = os.path.join('song', row['song']).replace('\\', '/')
-        val_lines.append(f"{song_path} {row['id']}")
+        for _, row in val_data.iterrows():
+            hum_path = os.path.join('hum', row['hum']).replace('\\', '/')
+            val_lines.append(f"{hum_path} {row['id']}")
 
-    train_lines = list(dict.fromkeys(train_lines))
-    val_lines = list(dict.fromkeys(val_lines))
+            song_path = os.path.join('song', row['song']).replace('\\', '/')
+            val_lines.append(f"{song_path} {row['id']}")
 
-    with open(os.path.join(output_dir, 'train_list.txt'), 'w', encoding='utf-8') as f:
-        f.write('\n'.join(train_lines))
+        # Remove duplicates while preserving order
+        train_lines = list(dict.fromkeys(train_lines))
+        val_lines = list(dict.fromkeys(val_lines))
 
-    with open(os.path.join(output_dir, 'val_list.txt'), 'w', encoding='utf-8') as f:
-        f.write('\n'.join(val_lines))
+        with open(os.path.join(output_dir, 'train_list.txt'), 'w', encoding='utf-8') as f:
+            f.write('\n'.join(train_lines))
 
-    print(f"Created train list with {len(train_lines)} entries")
-    print(f"Created validation list with {len(val_lines)} entries")
+        with open(os.path.join(output_dir, 'val_list.txt'), 'w', encoding='utf-8') as f:
+            f.write('\n'.join(val_lines))
+
+        print(f"Created train list with {len(train_lines)} entries")
+        print(f"Created validation list with {len(val_lines)} entries")
+        print(f"Train samples: {len(train_data)}")
+        print(f"Validation samples: {len(val_data)}")
+
+    except Exception as e:
+        print(f"Error processing metadata file: {e}")
+        raise
 
 class Config:
     def __init__(self):
