@@ -3,7 +3,7 @@ import numpy as np
 import os
 import csv
 from torch.nn import DataParallel
-from train_model_3 import CustomResNet
+from train_model_3 import ResNetFace
 from train_model_2 import Config
 from tqdm import tqdm
 import torch.nn.functional as F
@@ -14,16 +14,12 @@ class EmbeddingGenerator:
         self.embedding_dim = self.config.embedding_dim
         self.device = device if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {self.device}")
-        print(f"Using backbone: {self.config.backbone}")
         print(f"Input shape: {self.config.input_shape}")
         print(f"Embedding dimension: {self.embedding_dim}")
         self.model = self._initialize_model(model_path)
 
     def _initialize_model(self, model_path):
-        model = CustomResNet(
-            feature_dim=self.embedding_dim,
-            backbone=self.config.backbone
-        )
+        model = ResNetFace(feature_dim=self.embedding_dim)
 
         state_dict = torch.load(model_path, map_location=self.device, weights_only=True)
 
