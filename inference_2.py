@@ -27,12 +27,10 @@ class EmbeddingGenerator:
             model = DataParallel(model)
         else:
             if torch.cuda.device_count() > 1:
-                # Create new state dict with 'module.' prefix
                 new_state_dict = {'module.' + k: v for k, v in state_dict.items()}
                 state_dict = new_state_dict
                 model = DataParallel(model)
 
-        # Load the state dict
         try:
             model.load_state_dict(state_dict, strict=True)
         except RuntimeError as e:
@@ -78,8 +76,6 @@ def process_inference_data(input_folder, output_folder, model_path):
     output_folder = os.path.join(output_folder, "output7")
     os.makedirs(os.path.join(output_folder, "song"), exist_ok=True)
 
-    generator = EmbeddingGenerator(model_path)
-
     metadata_path = os.path.join(input_folder, "metadata.csv")
     if not os.path.exists(metadata_path):
         print(f"Error: Metadata file not found at {metadata_path}")
@@ -87,48 +83,62 @@ def process_inference_data(input_folder, output_folder, model_path):
 
     output_metadata = []
     failed_files = []
+    files_to_process = []
 
-    print("Reading metadata and processing files...")
+    print("Reading metadata and checking files...")
     with open(metadata_path, newline='') as csvfile:
         reader = csv.DictReader(csvfile)
         rows = list(reader)
 
+        for row in rows:
+            input_path = os.path.join(input_folder, "song", row['song'])
+            output_filename = os.path.splitext(row['song'])[0] + "_embedding.npy"
+            output_path = os.path.join(output_folder, "song", output_filename)
+
+            # Skip if output file already exists
+            if os.path.exists(output_path):
+                output_metadata.append({
+                    'id': row['id'],
+                    'song': output_filename,
+                    'info': row['info']
+                })
+                continue
+
+            if not os.path.exists(input_path):
+                print(f"Warning: Input file not found: {input_path}")
+                failed_files.append(row)
+                continue
+
+            files_to_process.append((row, input_path, output_path))
+
+    if files_to_process:
+        generator = EmbeddingGenerator(model_path)
         batch_size = generator.config.train_batch_size
         print(f"Using batch size: {batch_size}")
 
-        for i in tqdm(range(0, len(rows), batch_size), desc="Processing batches"):
-            batch_rows = rows[i:i + batch_size]
+        for i in tqdm(range(0, len(files_to_process), batch_size), desc="Processing batches"):
+            batch = files_to_process[i:i + batch_size]
 
-            for row in batch_rows:
+            for row, input_path, output_path in batch:
                 try:
-                    input_path = os.path.join(input_folder, "song", row['song'])
-                    if not os.path.exists(input_path):
-                        print(f"Warning: Input file not found: {input_path}")
-                        failed_files.append(row)
-                        continue
-
-                    output_filename = os.path.splitext(row['song'])[0] + "_embedding.npy"
-                    output_path = os.path.join(output_folder, "song", output_filename)
-
                     input_tensor = generator.load_and_preprocess(input_path)
+                    embedding = generator.generate_embedding(input_tensor)
+                    np.save(output_path, embedding)
 
-                    try:
-                        embedding = generator.generate_embedding(input_tensor)
-                        np.save(output_path, embedding)
+                    output_metadata.append({
+                        'id': row['id'],
+                        'song': os.path.basename(output_path),
+                        'info': row['info']
+                    })
 
-                        output_metadata.append({
-                            'id': row['id'],
-                            'song': output_filename,
-                            'info': row['info']
-                        })
-
-                    except ValueError as ve:
-                        print(f"Error with embedding generation for {row['song']}: {ve}")
-                        failed_files.append(row)
-
+                except ValueError as ve:
+                    print(f"Error with embedding generation for {row['song']}: {ve}")
+                    failed_files.append(row)
                 except Exception as e:
                     print(f"Error processing file {row['song']}: {str(e)}")
                     failed_files.append(row)
+    else:
+        print("No new files to process")
 
     output_metadata_path = os.path.join(output_folder, "metadata.csv")
     with open(output_metadata_path, 'w', newline='') as csvfile:
