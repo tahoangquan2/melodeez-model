@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 import time
 from torch.nn import DataParallel
 from train_model_3 import (
-    CustomResNet,
+    ResNetFace,
     AudioDataset,
     FocalLoss,
 )
@@ -46,7 +46,7 @@ def train_model_1(opt):
         return None
 
     print("Initializing model...")
-    model = CustomResNet(feature_dim=opt.embedding_dim)
+    model = ResNetFace(feature_dim=opt.embedding_dim)
     model = model.to(device)
     if torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs")
@@ -62,8 +62,8 @@ def train_model_1(opt):
     criterion = FocalLoss(gamma=2)
     scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer,
-        step_size=20,
-        gamma=0.1
+        step_size=opt.lr_step,
+        gamma=opt.lr_decay
     )
 
     print("Starting training...")

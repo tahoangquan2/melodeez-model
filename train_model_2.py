@@ -55,15 +55,19 @@ def generate_lists(root_dir='output/output3', output_dir='checkpoints'):
 class Config:
     def __init__(self):
         # Training settings
-        self.train_batch_size = 64
+        self.train_batch_size = 32
         self.num_workers = 4
         self.max_epoch = 100
         self.lr = 1e-2
         self.weight_decay = 1e-1
         self.print_freq = 100
 
+        # Learning rate decay settings
+        self.lr_decay = 0.5
+        self.lr_step = 10
+
         # Model settings
-        self.backbone = 'resnet18'
+        self.backbone = 'resnetface'
         self.input_shape = (1, 80, 630)
         self.embedding_dim = 512
 
@@ -74,9 +78,6 @@ class Config:
 
         # Save settings
         self.checkpoints_path = 'checkpoints'
-
-        # DO NOT CHANGE I DONT KNOW WHY BUT DONT - Visualization settings
-        self.display = False
 
 def main():
     opt = Config()

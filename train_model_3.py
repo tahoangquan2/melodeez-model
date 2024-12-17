@@ -5,12 +5,12 @@ import numpy as np
 import os
 from torch.utils.data import Dataset
 import faiss
-import torchvision.models as models
 
 class FocalLoss(nn.Module):
-    def __init__(self, gamma=2):
+    def __init__(self, gamma=2, eps=1e-7):
         super(FocalLoss, self).__init__()
         self.gamma = gamma
+        self.eps = eps
 
     def forward(self, input, target):
         ce_loss = F.cross_entropy(input, target, reduction='none')
@@ -18,78 +18,94 @@ class FocalLoss(nn.Module):
         focal_loss = ((1 - pt) ** self.gamma * ce_loss).mean()
         return focal_loss
 
-class Visualizer:
-    def __init__(self, env='default', **kwargs):
-        try:
-            import visdom
-            self.vis = visdom.Visdom(env=env, **kwargs)
-            self.vis.close()
-            self.iters = {}
-            self.lines = {}
-            self.visdom_available = True
-        except ImportError:
-            print("Visdom not available.")
-            self.visdom_available = False
+class IRBlock(nn.Module):
+    def __init__(self, inplanes, planes, stride=1):
+        super(IRBlock, self).__init__()
+        self.bn1 = nn.BatchNorm2d(inplanes)
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.prelu = nn.PReLU(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, bias=False)
+        self.bn3 = nn.BatchNorm2d(planes)
 
-    def display_current_results(self, iters, x, name='train_loss'):
-        if not self.visdom_available:
-            return
-        iters_list = self.iters.setdefault(name, [])
-        lines_list = self.lines.setdefault(name, [])
-
-        iters_list.append(iters)
-        lines_list.append(x)
-
-        try:
-            self.vis.line(X=np.array(iters_list),
-                          Y=np.array(lines_list),
-                          win=name,
-                          opts=dict(legend=[name], title=name))
-        except Exception as e:
-            print(f"Visualization failed: {e}")
-
-class SEBlock(nn.Module):
-    def __init__(self, channel):
-        super(SEBlock, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.fc = nn.Sequential(
-            nn.Linear(channel, channel // 16),
-            nn.ReLU(),
-            nn.Linear(channel // 16, channel),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        b, c, _, _ = x.size()
-        y = self.avg_pool(x).view(b, c)
-        y = self.fc(y).view(b, c, 1, 1)
-        return x * y
-
-class CustomResNet(nn.Module):
-    def __init__(self, feature_dim=512, backbone='resnet18'):
-        super(CustomResNet, self).__init__()
-        if backbone == 'resnet18':
-            model = models.resnet18(weights=None)
+        if stride != 1 or inplanes != planes:
+            self.downsample = nn.Sequential(
+                nn.Conv2d(inplanes, planes, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(planes)
+            )
         else:
-            raise ValueError(f"Unsupported backbone: {backbone}")
-
-        model.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-
-        self.features = nn.Sequential(*list(model.children())[:-2])
-        self.se = SEBlock(512)
-        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(512, feature_dim)
-        self.bn = nn.BatchNorm1d(feature_dim)
+            self.downsample = None
 
     def forward(self, x):
-        x = self.features(x)
-        x = self.se(x)
+        identity = x
+
+        out = self.bn1(x)
+        out = self.conv1(out)
+        out = self.bn2(out)
+        out = self.prelu(out)
+        out = self.conv2(out)
+        out = self.bn3(out)
+
+        if self.downsample is not None:
+            identity = self.downsample(x)
+
+        out += identity
+        return out
+
+class ResNetFace(nn.Module):
+    def __init__(self, feature_dim=512):
+        super(ResNetFace, self).__init__()
+
+        # Layer configuration
+        layers = [2, 3, 4, 3]
+
+        # Initial layers with stride
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.prelu = nn.PReLU(64)
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        # Residual layers with specified channel configurations
+        self.layer1 = self._make_layer(IRBlock, 64, 128, layers[0], stride=1)
+        self.layer2 = self._make_layer(IRBlock, 128, 256, layers[1], stride=2)
+        self.layer3 = self._make_layer(IRBlock, 256, 512, layers[2], stride=2)
+        self.layer4 = self._make_layer(IRBlock, 512, 128, layers[3], stride=2)
+
+        # Final layers
+        self.bn4 = nn.BatchNorm2d(128)
+        self.avgpool = nn.AdaptiveAvgPool2d((10, 10))
+        self.dropout = nn.Dropout(0.4)
+        self.fc5 = nn.Linear(12800, feature_dim)
+        self.bn5 = nn.BatchNorm1d(feature_dim)
+
+    def _make_layer(self, block, inplanes, planes, blocks, stride=1):
+        layers = []
+        layers.append(block(inplanes, planes, stride))
+        for i in range(1, blocks):
+            layers.append(block(planes, planes, 1))
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = x.transpose(2, 3)
+
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.prelu(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.bn4(x)
+
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
-        x = self.fc(x)
-        if x.size(0) > 1:
-            x = self.bn(x)
-        return F.normalize(x, p=2, dim=1)
+        x = self.dropout(x)
+        x = self.fc5(x)
+        x = self.bn5(x)
+
+        return x
 
 class AudioDataset(Dataset):
     def __init__(self, root_dir, list_file, input_shape):
