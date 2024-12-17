@@ -59,7 +59,7 @@ class Config:
         self.num_workers = 4
         self.max_epoch = 200
         self.lr = 1e-2
-        self.weight_decay = 1e-1
+        self.weight_decay = 1e-4
         self.print_freq = 100
 
         # Learning rate decay settings

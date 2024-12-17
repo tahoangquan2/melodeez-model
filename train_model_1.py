@@ -60,10 +60,11 @@ def train_model_1(opt):
     )
 
     criterion = FocalLoss(gamma=2)
-    scheduler = torch.optim.lr_scheduler.StepLR(
+
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
-        step_size=opt.lr_step,
-        gamma=opt.lr_decay
+        T_max=opt.max_epoch,
+        eta_min=opt.lr * 1e-3
     )
 
     print("Starting training...")
