@@ -27,21 +27,19 @@ def train_model_1(opt):
         trainloader = DataLoader(train_dataset,
                                batch_size=opt.train_batch_size,
                                shuffle=True,
-                               num_workers=opt.num_workers,
+                               num_workers=0,
                                pin_memory=True,
-                               persistent_workers=True,
-                               prefetch_factor=2,
                                drop_last=True)
 
-        logger.info(f"Train dataset size: {len(train_dataset)}")
-        logger.info(f"{len(trainloader)} train iters per epoch")
+        val_dataset = AudioDataset(opt.train_root, opt.val_list, opt.input_shape)
+        valloader = DataLoader(val_dataset,
+                             batch_size=opt.train_batch_size,
+                             shuffle=False,
+                             num_workers=opt.num_workers)
 
-        sample_data = next(iter(trainloader))
-        logger.info(f"Batch shape: {sample_data[0].shape}")
-        logger.info(f"Label shape: {sample_data[1].shape}")
-        unique_labels = torch.unique(sample_data[1])
-        logger.info(f"Unique labels: {unique_labels}")
-        logger.info(f"Label range: {unique_labels.min().item()} to {unique_labels.max().item()}")
+        logger.info(f"Train dataset size: {len(train_dataset)}")
+        logger.info(f"Val dataset size: {len(val_dataset)}")
+        logger.info(f"{len(trainloader)} train iters per epoch")
 
     except Exception as e:
         logger.error(f"Fatal error in data loading: {e}")
@@ -121,17 +119,35 @@ def train_model_1(opt):
             logger.error("No successful batches in epoch, stopping training")
             return None
 
-        epoch_loss /= batch_count
-        logger.info(f"Epoch {epoch} - Average Loss: {epoch_loss:.4f}, Failed Batches: {failed_batches}")
+        train_loss = epoch_loss / batch_count
 
-        if epoch_loss < best_loss:
-            best_loss = epoch_loss
+        model.eval()
+        val_loss = 0
+        val_count = 0
+        with torch.no_grad():
+            for data_input, label in valloader:
+                try:
+                    data_input = data_input.to(device)
+                    label = label.to(device).long()
+                    feature = model(data_input)
+                    loss = criterion(feature, label)
+                    val_loss += loss.item()
+                    val_count += 1
+                except Exception as e:
+                    continue
+
+        val_loss = val_loss / val_count if val_count > 0 else float('inf')
+
+        logger.info(f"Epoch {epoch} - Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+
+        if val_loss < best_loss:
+            best_loss = val_loss
             save_model(model, opt.checkpoints_path, opt.backbone, 'best')
-            logger.info(f"New best model saved with loss: {best_loss:.4f}")
+            logger.info(f"New best model saved with val loss: {best_loss:.4f}")
 
         save_model(model, opt.checkpoints_path, opt.backbone, 'latest')
         scheduler.step()
         logger.info(f"Learning rate: {scheduler.get_last_lr()[0]:.6f}")
 
-    logger.info(f"Training completed. Best loss: {best_loss:.4f}")
+    logger.info(f"Training completed. Best val loss: {best_loss:.4f}")
     return best_loss
