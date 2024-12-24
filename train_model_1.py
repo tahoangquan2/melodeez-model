@@ -9,6 +9,7 @@ from train_model_3 import (
     AudioDataset,
     FocalLoss,
 )
+from logger import logger
 
 def save_model(model, save_path, name, iter_cnt):
     os.makedirs(save_path, exist_ok=True)
@@ -18,8 +19,8 @@ def save_model(model, save_path, name, iter_cnt):
 
 def train_model_1(opt):
     torch.manual_seed(3407)
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Using device: {device}")
 
     try:
         train_dataset = AudioDataset(opt.train_root, opt.train_list, opt.input_shape)
@@ -31,25 +32,25 @@ def train_model_1(opt):
                                persistent_workers=True,
                                prefetch_factor=2)
 
-        print(f"Train dataset size: {len(train_dataset)}")
-        print(f"{len(trainloader)} train iters per epoch")
+        logger.info(f"Train dataset size: {len(train_dataset)}")
+        logger.info(f"{len(trainloader)} train iters per epoch")
 
         sample_data = next(iter(trainloader))
-        print(f"Batch shape: {sample_data[0].shape}")
-        print(f"Label shape: {sample_data[1].shape}")
+        logger.info(f"Batch shape: {sample_data[0].shape}")
+        logger.info(f"Label shape: {sample_data[1].shape}")
         unique_labels = torch.unique(sample_data[1])
-        print(f"Unique labels: {unique_labels}")
-        print(f"Label range: {unique_labels.min().item()} to {unique_labels.max().item()}")
+        logger.info(f"Unique labels: {unique_labels}")
+        logger.info(f"Label range: {unique_labels.min().item()} to {unique_labels.max().item()}")
 
     except Exception as e:
-        print(f"Fatal error in data loading: {e}")
+        logger.error(f"Fatal error in data loading: {e}")
         return None
 
-    print("Initializing model...")
+    logger.info("Initializing model...")
     model = ResNetFace(feature_dim=opt.embedding_dim)
     model = model.to(device)
     if torch.cuda.device_count() > 1:
-        print(f"Using {torch.cuda.device_count()} GPUs")
+        logger.info(f"Using {torch.cuda.device_count()} GPUs")
         model = DataParallel(model)
 
     optimizer = torch.optim.SGD(
@@ -64,10 +65,10 @@ def train_model_1(opt):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
         T_max=opt.max_epoch,
-        eta_min=opt.lr * 1e-3
+        eta_min=opt.lr * 1e-4
     )
 
-    print("Starting training...")
+    logger.info("Starting training...")
     start = time.time()
     best_loss = float('inf')
 
@@ -103,33 +104,33 @@ def train_model_1(opt):
                 if batch_idx % opt.print_freq == 0:
                     speed = opt.print_freq / (time.time() - start)
                     time_str = time.asctime(time.localtime(time.time()))
-                    print(f'{time_str} Epoch {epoch} Batch {batch_idx}/{len(trainloader)} '
-                          f'Speed {speed:.1f} samples/sec Loss {loss.item():.4f}')
+                    logger.info(f'{time_str} Epoch {epoch} Batch {batch_idx}/{len(trainloader)} '
+                              f'Speed {speed:.1f} samples/sec Loss {loss.item():.4f}')
                     start = time.time()
 
             except Exception as e:
-                print(f"Error in training batch {batch_idx}: {e}")
+                logger.error(f"Error in training batch {batch_idx}: {e}")
                 failed_batches += 1
                 if failed_batches > max_failed_batches:
-                    print("Too many failed batches, stopping training")
+                    logger.error("Too many failed batches, stopping training")
                     return None
                 continue
 
         if batch_count == 0:
-            print("No successful batches in epoch, stopping training")
+            logger.error("No successful batches in epoch, stopping training")
             return None
 
         epoch_loss /= batch_count
-        print(f"Epoch {epoch} - Average Loss: {epoch_loss:.4f}, Failed Batches: {failed_batches}")
+        logger.info(f"Epoch {epoch} - Average Loss: {epoch_loss:.4f}, Failed Batches: {failed_batches}")
 
         if epoch_loss < best_loss:
             best_loss = epoch_loss
             save_model(model, opt.checkpoints_path, opt.backbone, 'best')
-            print(f"New best model saved with loss: {best_loss:.4f}")
+            logger.info(f"New best model saved with loss: {best_loss:.4f}")
 
         save_model(model, opt.checkpoints_path, opt.backbone, 'latest')
         scheduler.step()
-        print(f"Learning rate: {scheduler.get_last_lr()[0]:.6f}")
+        logger.info(f"Learning rate: {scheduler.get_last_lr()[0]:.6f}")
 
-    print(f"Training completed. Best loss: {best_loss:.4f}")
+    logger.info(f"Training completed. Best loss: {best_loss:.4f}")
     return best_loss

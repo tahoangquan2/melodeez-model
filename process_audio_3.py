@@ -73,7 +73,7 @@ def process_data(data_folder, output_folder):
 
         all_ids = set()
         rows = []
-        with open(input_metadata, 'r') as f:
+        with open(input_metadata, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
                 all_ids.add(row['id'])

@@ -5,6 +5,7 @@ import numpy as np
 import os
 from torch.utils.data import Dataset
 import faiss
+from logger import logger
 
 class FocalLoss(nn.Module):
     def __init__(self, gamma=2, eps=1e-7):
@@ -115,14 +116,14 @@ class AudioDataset(Dataset):
         else:
             raise ValueError("input_shape must be a tuple of (channels, height, width)")
 
-        with open(list_file, 'r') as f:
+        with open(list_file, 'r', encoding='utf-8') as f:
             lines = f.readlines()
             self.samples = []
             for line in lines:
                 try:
                     parts = line.rstrip('\n').rsplit(' ', 1)
                     if len(parts) != 2:
-                        print(f"Warning: Malformed line: {line}")
+                        logger.warning(f"Malformed line: {line}")
                         continue
 
                     path, label_str = parts
@@ -131,17 +132,17 @@ class AudioDataset(Dataset):
 
                     full_path = os.path.join(root_dir, path)
                     if not os.path.exists(full_path):
-                        print(f"Warning: File not found: {full_path}")
+                        logger.warning(f"File not found: {full_path}")
                         continue
 
                     self.samples.append((full_path, label))
                 except Exception as e:
-                    print(f"Warning: Error processing line: {line}, Error: {e}")
+                    logger.warning(f"Error processing line: {line}, Error: {e}")
 
         if not self.samples:
             raise RuntimeError("No valid samples found in the dataset")
 
-        print(f"Loaded {len(self.samples)} valid samples")
+        logger.info(f"Loaded {len(self.samples)} valid samples")
 
     def __len__(self):
         return len(self.samples)
@@ -172,7 +173,7 @@ class AudioDataset(Dataset):
             return torch.from_numpy(data).float().unsqueeze(0), label
 
         except Exception as e:
-            print(f"Error loading sample {idx} from {npy_path}: {e}")
+            logger.error(f"Error loading sample {idx} from {npy_path}: {e}")
             return torch.zeros((1,) + self.input_shape), 0
 
 def read_val(path_val, data_root):
