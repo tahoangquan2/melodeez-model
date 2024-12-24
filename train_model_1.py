@@ -27,7 +27,7 @@ def train_model_1(opt):
         trainloader = DataLoader(train_dataset,
                                batch_size=opt.train_batch_size,
                                shuffle=True,
-                               num_workers=0,
+                               num_workers=opt.num_workers,
                                pin_memory=True,
                                drop_last=True)
 

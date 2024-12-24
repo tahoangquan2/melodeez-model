@@ -56,7 +56,7 @@ class Config:
     def __init__(self):
         # Training settings
         self.train_batch_size = 32
-        self.num_workers = 4
+        self.num_workers = 2
         self.max_epoch = 20
         self.lr = 1e-3
         self.weight_decay = 1e-4
