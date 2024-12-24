@@ -75,7 +75,7 @@ class ResNetFace(nn.Module):
         # Final layers
         self.bn4 = nn.BatchNorm2d(128)
         self.avgpool = nn.AdaptiveAvgPool2d((10, 10))
-        self.dropout = nn.Dropout(0.4)
+        self.dropout = nn.Dropout(0.5)
         self.fc5 = nn.Linear(12800, feature_dim)
         self.bn5 = nn.BatchNorm1d(feature_dim)
 

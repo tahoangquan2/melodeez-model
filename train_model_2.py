@@ -57,14 +57,10 @@ class Config:
         # Training settings
         self.train_batch_size = 32
         self.num_workers = 2
-        self.max_epoch = 20
+        self.max_epoch = 30
         self.lr = 1e-3
-        self.weight_decay = 1e-4
+        self.weight_decay = 5e-4
         self.print_freq = 100
-
-        # Learning rate decay settings
-        self.lr_decay = 0.9
-        self.lr_step = 20
 
         # Model settings
         self.backbone = 'resnetface'
