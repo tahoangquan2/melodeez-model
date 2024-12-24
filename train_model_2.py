@@ -56,11 +56,11 @@ class Config:
     def __init__(self):
         # Training settings
         self.train_batch_size = 32
-        self.num_workers = 2
-        self.max_epoch = 30
-        self.lr = 1e-3
-        self.weight_decay = 5e-4
-        self.print_freq = 100
+        self.num_workers = 4
+        self.max_epoch = 50
+        self.lr = 5e-4
+        self.weight_decay = 1e-4
+        self.print_freq = 50
 
         # Model settings
         self.backbone = 'resnetface'

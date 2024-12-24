@@ -72,15 +72,14 @@ def train_model_1(opt):
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             mode='min',
-            factor=0.5,
-            patience=2,
-            verbose=True,
+            factor=0.2,
+            patience=3,
             min_lr=opt.lr * 1e-5
         )
 
         best_loss = float('inf')
         patience = 0
-        max_patience = 5
+        max_patience = 10
 
         for epoch in range(1, opt.max_epoch + 1):
             model.train()
