@@ -28,7 +28,7 @@ def run_process_pipeline():
 def run_inference_pipeline():
     INPUT_FOLDER = "song"
     OUTPUT_FOLDER = "output"
-    MODEL_PATH = "checkpoints/resnetface_latest.pth"
+    MODEL_PATH = "checkpoints/resnetface_best.pth"
 
     print("Starting inference preprocessing pipeline...")
     process_inference_data(INPUT_FOLDER, OUTPUT_FOLDER)
@@ -42,7 +42,7 @@ def run_inference_pipeline():
 def run_search_pipeline():
     INPUT_FOLDER = "search"
     OUTPUT_FOLDER = "search"
-    MODEL_PATH = "checkpoints/resnetface_latest.pth"
+    MODEL_PATH = "checkpoints/resnetface_best.pth"
 
     print("Processing input audio files...")
     search_1(INPUT_FOLDER, OUTPUT_FOLDER)
