@@ -30,7 +30,8 @@ def train_model_1(opt):
                                num_workers=opt.num_workers,
                                pin_memory=True,
                                persistent_workers=True,
-                               prefetch_factor=2)
+                               prefetch_factor=2,
+                               drop_last=True)
 
         logger.info(f"Train dataset size: {len(train_dataset)}")
         logger.info(f"{len(trainloader)} train iters per epoch")

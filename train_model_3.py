@@ -178,7 +178,7 @@ class AudioDataset(Dataset):
 
 def read_val(path_val, data_root):
     dict_data = []
-    with open(path_val, 'r') as files:
+    with open(path_val, 'r', encoding='utf-8') as files:
         for line in files:
             parts = line.rstrip('\n').rsplit(' ', 1)
             if len(parts) != 2:
