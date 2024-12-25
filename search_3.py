@@ -89,11 +89,11 @@ def search_3(input_folder, output_folder):
     results_path = os.path.join(results_folder, "search_results.json")
     error_path = os.path.join(results_folder, "search_errors.json")
 
-    with open(results_path, 'w') as f:
+    with open(results_path, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2)
 
     if skipped_files:
-        with open(error_path, 'w') as f:
+        with open(error_path, 'w', encoding='utf-8') as f:
             json.dump({'skipped_files': skipped_files}, f, indent=2)
 
     return results
@@ -102,7 +102,7 @@ def load_mappings(mapping_path):
     if not os.path.exists(mapping_path):
         raise FileNotFoundError(f"Mapping file not found: {mapping_path}")
 
-    with open(mapping_path, 'r') as f:
+    with open(mapping_path, 'r', encoding='utf-8') as f:
         try:
             mappings = json.load(f)
             if 'metadata' not in mappings:
@@ -116,7 +116,7 @@ def load_metadata(metadata_path):
         raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
 
     metadata = {}
-    with open(metadata_path, 'r') as f:
+    with open(metadata_path, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
             metadata[row['id']] = {
