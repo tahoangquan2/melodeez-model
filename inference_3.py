@@ -68,7 +68,7 @@ def create_faiss_index(output_folder):
             raise FileNotFoundError(f"Metadata file not found: {metadata_path}")
 
         print("Loading and validating embeddings...")
-        with open(metadata_path, 'r') as f:
+        with open(metadata_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             rows = list(reader)
             batch_size = index_builder.config.train_batch_size
@@ -98,7 +98,7 @@ def create_faiss_index(output_folder):
         mapping_path = os.path.join(output_folder, "index_mapping.json")
 
         faiss.write_index(index, faiss_path)
-        with open(mapping_path, 'w') as f:
+        with open(mapping_path, 'w', encoding='utf-8') as f:
             json.dump({
                 'metadata': index_builder.metadata,
                 'embedding_dim': index_builder.embedding_dim,
@@ -119,7 +119,7 @@ def create_faiss_index(output_folder):
 def batch_similarity_search(index_path, mapping_path, query_embeddings, k=10):
     try:
         index = faiss.read_index(index_path)
-        with open(mapping_path, 'r') as f:
+        with open(mapping_path, 'r', encoding='utf-8') as f:
             mapping_data = json.load(f)
 
         if not isinstance(query_embeddings, np.ndarray):

@@ -86,7 +86,7 @@ def process_inference_data(input_folder, output_folder, model_path):
     files_to_process = []
 
     print("Reading metadata and checking files...")
-    with open(metadata_path, newline='') as csvfile:
+    with open(metadata_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile)
         rows = list(reader)
 
@@ -141,7 +141,7 @@ def process_inference_data(input_folder, output_folder, model_path):
         print("No new files to process")
 
     output_metadata_path = os.path.join(output_folder, "metadata.csv")
-    with open(output_metadata_path, 'w', newline='') as csvfile:
+    with open(output_metadata_path, 'w', newline='', encoding='utf-8') as csvfile:
         fieldnames = ['id', 'song', 'info']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
